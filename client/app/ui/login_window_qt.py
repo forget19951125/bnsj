@@ -17,15 +17,30 @@ class LoginWindow(QWidget):
         super().__init__()
         self.on_login_success = on_login_success
         self.on_close = on_close
+        self.login_success = False  # 标记登录是否成功
         self.init_ui()
     
     def closeEvent(self, event: QCloseEvent):
         """窗口关闭事件"""
+        # 如果登录成功，关闭登录窗口时不退出程序
+        if self.login_success:
+            event.accept()
+            return
+        
+        # 如果登录窗口关闭，且没有主窗口，则退出程序
         if self.on_close:
             self.on_close()
         else:
-            # 默认退出程序
-            QApplication.instance().quit()
+            # 检查是否有其他窗口（主窗口）
+            app = QApplication.instance()
+            if app:
+                # 检查是否有其他窗口（包括隐藏的窗口）
+                widgets = app.allWidgets()
+                # 查找所有顶级窗口（不包括登录窗口本身）
+                top_level_windows = [w for w in widgets if isinstance(w, QWidget) and w.isWindow() and w != self]
+                if not top_level_windows:
+                    # 没有其他窗口，退出程序
+                    app.quit()
         event.accept()
     
     def init_ui(self):

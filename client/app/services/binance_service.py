@@ -108,31 +108,25 @@ class BinanceService:
         direction: str
     ) -> Dict:
         """下单"""
-        # TODO: 临时注释掉实际下单，用于测试客户端逻辑
-        # token_info = self.load_token()
-        # if not token_info:
-        #     raise Exception("币安账号未登录")
-        # 
-        # return place_order_web(
-        #     csrftoken=token_info["csrftoken"],
-        #     p20t=token_info["p20t"],
-        #     orderAmount=orderAmount,
-        #     timeIncrements=timeIncrements,
-        #     symbolName=symbolName,
-        #     payoutRatio=payoutRatio,
-        #     direction=direction
-        # )
+        # 导入实际下单函数
+        from ..binance_client import place_order_web
         
-        # 模拟下单成功（用于测试）
-        return {
-            "success": True,
-            "code": 200,
-            "message": "下单成功（测试模式）",
-            "data": {
-                "orderId": "test_order_123",
-                "symbol": symbolName,
-                "direction": direction,
-                "amount": orderAmount
-            }
-        }
+        token_info = self.load_token()
+        if not token_info:
+            raise Exception("币安账号未登录")
+        
+        self._log(f"正在调用币安API下单: 金额={orderAmount}, 交易对={symbolName}, 方向={direction}, 时间周期={timeIncrements}")
+        
+        result = place_order_web(
+            csrftoken=token_info["csrftoken"],
+            p20t=token_info["p20t"],
+            orderAmount=orderAmount,
+            timeIncrements=timeIncrements,
+            symbolName=symbolName,
+            payoutRatio=payoutRatio,
+            direction=direction
+        )
+        
+        self._log(f"币安API返回结果: {result}")
+        return result
 

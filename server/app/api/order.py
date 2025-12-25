@@ -63,24 +63,14 @@ def create_order(
     from ..api.admin import get_admin_auth
     get_admin_auth(admin_token, authorization, db)
     
-    order = OrderService.create_order(
-        db=db,
-        time_increments=request.time_increments,
-        symbol_name=request.symbol_name,
-        direction=request.direction,
-        valid_duration=request.valid_duration
-    )
+    # 只允许ETHUSDT
+    if request.symbol_name.upper() != "ETHUSDT":
+        raise HTTPException(status_code=400, detail="只支持ETHUSDT交易对")
     
-    return CreateOrderResponse(
-        data={
-            "order_id": order.id
-        }
-    )
-    """创建订单（管理员）"""
     order = OrderService.create_order(
         db=db,
         time_increments=request.time_increments,
-        symbol_name=request.symbol_name,
+        symbol_name=request.symbol_name.upper(),
         direction=request.direction,
         valid_duration=request.valid_duration
     )
@@ -104,6 +94,18 @@ def pull_order(
     # 检查用户是否有效
     if not UserService.check_user_valid(db, user_id):
         raise HTTPException(status_code=401, detail="账号已过期或已禁用")
+    
+    # 更新心跳（拉取订单时也更新心跳，表示用户活跃）
+    from ..redis_client import get_redis
+    from datetime import datetime
+    redis_client = get_redis()
+    heartbeat_key = f"user:heartbeat:{user_id}"
+    redis_client.setex(heartbeat_key, 30, str(datetime.now().timestamp()))
+    
+    # 标记用户正在接单（设置Redis key，24小时过期）
+    from ..config import settings
+    ordering_key = f"user:ordering:{user_id}"
+    redis_client.setex(ordering_key, settings.jwt_expire_hours * 3600, "1")
     
     # 拉取订单
     order = OrderService.pull_order(db, user_id)

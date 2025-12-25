@@ -41,6 +41,7 @@ class ClientApp:
         self.main_window = None
         self.qr_window = None
         self.session_timer: threading.Timer = None
+        self.heartbeat_timer: threading.Timer = None
         
         # 创建信号对象用于跨线程通信
         self.binance_signals = BinanceLoginSignals()
@@ -55,19 +56,10 @@ class ClientApp:
         
     def run(self):
         """运行应用"""
-        # 尝试加载已保存的会话
-        if self.auth_service.load_session():
-            user_data = self.auth_service.get_current_user()
-            if user_data:
-                # 同步token到main的api_client
-                if user_data.get("token"):
-                    self.api_client.set_token(user_data["token"])
-                self._start_main_window(user_data["username"])
-                # 运行Qt事件循环
-                sys.exit(self.qt_app.exec_())
-                return
+        # 每次启动都清除之前的会话，强制用户重新登录
+        self.auth_service.logout()
         
-        # 显示登录窗口
+        # 显示登录窗口（强制登录）
         self._show_login_window()
         
         # 运行Qt事件循环
@@ -76,7 +68,8 @@ class ClientApp:
     def _show_login_window(self):
         """显示登录窗口"""
         try:
-            self.login_window = LoginWindow(self._handle_login, on_close=self._handle_exit)
+            # 不传递on_close回调，避免关闭登录窗口时退出程序
+            self.login_window = LoginWindow(self._handle_login, on_close=None)
             self.login_window.show()
         except Exception as e:
             import traceback
@@ -91,6 +84,10 @@ class ClientApp:
             self.order_service.stop()
         if self.session_timer:
             self.session_timer.cancel()
+            self.session_timer = None
+        if self.heartbeat_timer:
+            self.heartbeat_timer.cancel()
+            self.heartbeat_timer = None
         # 退出程序
         sys.exit(0)
     
@@ -100,10 +97,21 @@ class ClientApp:
             result = self.auth_service.login(username, password)
             
             if result.get("code") == 200:
-                # 登录成功，关闭登录窗口，启动主窗口
+                # 登录成功，同步token到api_client
+                if result.get("data", {}).get("token"):
+                    self.api_client.set_token(result["data"]["token"])
+                
+                # 标记登录成功，避免关闭登录窗口时退出程序
+                if self.login_window:
+                    self.login_window.login_success = True
+                
+                # 先创建并显示主窗口（确保主窗口存在）
+                self._start_main_window(username)
+                
+                # 主窗口创建后再关闭登录窗口（此时主窗口已存在，且已标记登录成功，不会触发退出）
                 if self.login_window:
                     self.login_window.close()
-                self._start_main_window(username)
+                    self.login_window = None
             else:
                 # 显示错误
                 error_msg = result.get("message", "登录失败")
@@ -113,7 +121,10 @@ class ClientApp:
                 if self.login_window:
                     self.login_window.show_error(error_msg)
         except Exception as e:
+            import traceback
             error_msg = str(e)
+            print(f"登录异常: {error_msg}")
+            traceback.print_exc()
             if "Token已失效" in error_msg or "已在其他地方登录" in error_msg:
                 error_msg = "账号已在其他地方登录，请重新登录"
             if self.login_window:
@@ -176,11 +187,22 @@ class ClientApp:
         self.order_service.set_order_amount(settings.default_order_amount)
         self.main_window.amount_input.setText(str(int(settings.default_order_amount)))
         
+        # 启动心跳定时器（每10秒发送一次心跳）
+        self._start_heartbeat()
+        
         # 启动24小时会话定时器和账号到期检查
         self._start_session_timer()
         
-        # 显示主窗口
+        # 显示主窗口（确保窗口显示）
         self.main_window.show()
+        self.main_window.raise_()  # 将窗口置于最前
+        self.main_window.activateWindow()  # 激活窗口
+        
+        # 如果币安未登录，自动弹出币安登录窗口
+        if not binance_service.is_logged_in():
+            # 延迟一下，确保主窗口已经显示
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(500, self._handle_binance_login)
     
     def _handle_binance_login(self):
         """处理币安登录"""
@@ -316,9 +338,10 @@ class ClientApp:
         if order:
             if result.get("success") or result.get("code") == 200:
                 amount = self.order_service.order_amount if self.order_service else "N/A"
+                time_increments = order.get('time_increments', 'N/A')
                 self.main_window.log(
                     f"订单执行成功: {order['symbol_name']} {order['direction']} "
-                    f"金额={amount}"
+                    f"时间周期={time_increments} 金额={amount}"
                 )
             else:
                 error_msg = result.get("message") or result.get("error", "未知错误")
@@ -327,19 +350,55 @@ class ClientApp:
                 )
         else:
             if result.get("error"):
-                # 检查是否是token失效
+                # 检查是否是token失效或账号过期
                 error_msg = result.get("error", "")
-                if "Token已失效" in error_msg or "401" in str(result.get("code", "")):
-                    self.main_window.log("登录已失效，请重新登录")
+                if "Token已失效" in error_msg or "账号已过期" in error_msg or "已禁用" in error_msg or "401" in str(result.get("code", "")):
+                    if "账号已过期" in error_msg or "已禁用" in error_msg:
+                        self.main_window.log("账号已过期或已禁用，正在退出登录...")
+                    else:
+                        self.main_window.log("登录已失效，请重新登录")
                     self._handle_logout()
                 else:
                     self.main_window.log(f"拉取订单错误: {error_msg}")
+    
+    def _start_heartbeat(self):
+        """启动心跳定时器"""
+        def send_heartbeat():
+            """发送心跳"""
+            try:
+                self.api_client.send_heartbeat()
+            except Exception as e:
+                error_msg = str(e)
+                if "Token已失效" in error_msg or "已在其他地方登录" in error_msg:
+                    if self.main_window:
+                        from PyQt5.QtCore import QTimer
+                        QTimer.singleShot(0, lambda: self.main_window.log("心跳失败: Token已失效，正在退出...") if self.main_window else None)
+                    self._handle_logout()
+                    return
+                # 其他错误不处理，继续发送心跳
+            
+            # 10秒后再次发送心跳
+            self.heartbeat_timer = threading.Timer(10.0, send_heartbeat)
+            self.heartbeat_timer.daemon = True
+            self.heartbeat_timer.start()
+        
+        # 立即发送第一次心跳
+        if self.heartbeat_timer:
+            self.heartbeat_timer.cancel()
+        self.heartbeat_timer = threading.Timer(10.0, send_heartbeat)
+        self.heartbeat_timer.daemon = True
+        self.heartbeat_timer.start()
     
     def _handle_logout(self):
         """处理退出登录"""
         # 停止订单服务
         if self.order_service:
             self.order_service.stop()
+        
+        # 停止心跳定时器
+        if self.heartbeat_timer:
+            self.heartbeat_timer.cancel()
+            self.heartbeat_timer = None
         
         # 停止会话定时器
         if self.session_timer:

@@ -119,3 +119,43 @@ def verify(
         }
     )
 
+
+class HeartbeatResponse(BaseModel):
+    code: int = 200
+    message: str = "success"
+
+
+@router.post("/heartbeat", response_model=HeartbeatResponse)
+def heartbeat(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+):
+    """心跳接口（用于判断用户是否在线）"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="未授权")
+    
+    token = authorization.split(" ")[1]
+    
+    # 验证Token
+    payload = verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Token无效或已过期")
+    
+    user_id = payload.get("user_id")
+    
+    # 检查Token是否仍然有效（单点登录检查）
+    redis_client = get_redis()
+    session_key = f"session:token:{token}"
+    if not redis_client.exists(session_key):
+        raise HTTPException(status_code=401, detail="Token已失效（已在其他地方登录）")
+    
+    # 检查用户是否有效
+    if not UserService.check_user_valid(db, user_id):
+        raise HTTPException(status_code=401, detail="账号已过期或已禁用")
+    
+    # 更新心跳时间（30秒过期，如果30秒内没有心跳则认为离线）
+    heartbeat_key = f"user:heartbeat:{user_id}"
+    redis_client.setex(heartbeat_key, 30, str(datetime.now().timestamp()))
+    
+    return HeartbeatResponse()
+

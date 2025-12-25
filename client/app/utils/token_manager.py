@@ -35,12 +35,22 @@ class TokenManager:
         try:
             with open(self.token_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                # 检查是否过期
-                expire_at = datetime.fromisoformat(data["expire_at"])
-                if datetime.now() > expire_at:
-                    return None
+                # 检查账号是否过期（expire_at是账号到期时间，不是token到期时间）
+                expire_at_str = data.get("expire_at")
+                if expire_at_str:
+                    try:
+                        expire_at = datetime.fromisoformat(expire_at_str)
+                        if datetime.now() > expire_at:
+                            # 账号已过期，清除token
+                            self.clear_token()
+                            return None
+                    except:
+                        # 日期解析失败，继续使用token
+                        pass
                 return data
-        except:
+        except Exception as e:
+            # 文件读取失败，返回None
+            print(f"加载token失败: {e}")
             return None
     
     def clear_token(self):

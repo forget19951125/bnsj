@@ -37,6 +37,7 @@ class AuthService:
         
         # 检查会话是否过期（24小时）
         if self.token_manager.is_session_expired():
+            # 会话已过期，清除本地token
             self.token_manager.clear_token()
             return False
         
@@ -45,14 +46,19 @@ class AuthService:
             self.api_client.set_token(token_data["token"])
             verify_result = self.api_client.verify_token()
             if verify_result.get("code") == 200:
+                # Token有效，恢复会话成功
                 return True
             else:
                 # Token已失效（可能在别处登录），清除本地token
                 self.token_manager.clear_token()
                 return False
         except Exception as e:
-            # Token验证失败（可能是单点登录导致），清除本地token
-            self.token_manager.clear_token()
+            # Token验证失败（可能是网络问题或单点登录导致）
+            # 如果是网络问题，不立即清除token，让用户看到错误信息
+            # 如果是401错误（单点登录），则清除token
+            error_msg = str(e)
+            if "401" in error_msg or "Token已失效" in error_msg or "已在其他地方登录" in error_msg:
+                self.token_manager.clear_token()
             return False
     
     def logout(self):

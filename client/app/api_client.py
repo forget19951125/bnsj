@@ -47,6 +47,23 @@ class APIClient:
         response.raise_for_status()
         return response.json()
     
+    def send_heartbeat(self) -> bool:
+        """发送心跳"""
+        url = f"{self.base_url}/api/auth/heartbeat"
+        try:
+            response = requests.post(url, headers=self._get_headers())
+            if response.status_code == 401:
+                raise Exception("Token已失效，请重新登录")
+            response.raise_for_status()
+            return True
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 401:
+                raise Exception("Token已失效，请重新登录")
+            raise
+        except Exception as e:
+            # 心跳失败不应该影响主流程，只记录错误
+            return False
+    
     def pull_order(self) -> Optional[Dict[str, Any]]:
         """拉取订单"""
         url = f"{self.base_url}/api/orders/pull"
@@ -54,7 +71,16 @@ class APIClient:
             response = requests.get(url, headers=self._get_headers())
             # 检查HTTP状态码
             if response.status_code == 401:
-                raise Exception("Token已失效，请重新登录")
+                # 尝试获取详细的错误信息
+                try:
+                    error_data = response.json()
+                    detail = error_data.get("detail", "")
+                    if "账号已过期" in detail or "已禁用" in detail:
+                        raise Exception("账号已过期或已禁用，请重新登录")
+                    else:
+                        raise Exception("Token已失效，请重新登录")
+                except:
+                    raise Exception("Token已失效，请重新登录")
             response.raise_for_status()
             
             # 检查响应内容
@@ -69,7 +95,11 @@ class APIClient:
             
             # 检查业务状态码
             if data.get("code") == 401 or data.get("code") == 403:
-                raise Exception("Token已失效，请重新登录")
+                message = data.get("message", "") or data.get("detail", "")
+                if "账号已过期" in message or "已禁用" in message:
+                    raise Exception("账号已过期或已禁用，请重新登录")
+                else:
+                    raise Exception("Token已失效，请重新登录")
             
             if data.get("code") == 200:
                 data_obj = data.get("data")

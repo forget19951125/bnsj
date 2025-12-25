@@ -12,7 +12,7 @@ from ..services.admin_service import AdminService
 from ..utils.jwt import verify_token
 
 
-def verify_admin_token(admin_token: Optional[str] = Header(None)):
+def verify_admin_token(admin_token: Optional[str] = Header(None, alias="admin-token")):
     """验证管理员Token（兼容旧方式）"""
     if not admin_token or admin_token != settings.admin_token:
         raise HTTPException(status_code=403, detail="管理员权限不足")

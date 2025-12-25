@@ -85,8 +85,7 @@ class OrderService:
                     self.running = False
                     break
                 
-                # 拉取订单
-                self._log("正在拉取订单...")
+                # 拉取订单（不打印日志，避免日志过多）
                 try:
                     order = self.api_client.pull_order()
                     
@@ -94,33 +93,34 @@ class OrderService:
                         order_id = order.get('id', 'N/A')
                         symbol_name = order.get('symbol_name', 'N/A')
                         direction = order.get('direction', 'N/A')
-                        self._log(f"收到订单: ID={order_id}, 交易对={symbol_name}, 方向={direction}")
+                        self._log(f"✓ 收到订单: ID={order_id}, 交易对={symbol_name}, 方向={direction}")
                         # 检查订单有效期
                         if self._is_order_valid(order):
-                            self._log("订单在有效期内，开始执行下单...")
+                            self._log("✓ 订单在有效期内，开始执行下单...")
                             # 执行下单
                             self._execute_order(order)
                         else:
-                            self._log("订单已过期，跳过")
-                    else:
-                        # 只有在没有订单时才记录，避免日志过多
-                        pass  # 不记录"暂无新订单"，减少日志噪音
+                            self._log("✗ 订单已过期，跳过")
+                    # 没有订单时不打印日志，减少日志噪音
                 except Exception as e:
                     # 这个异常会在外层catch中处理
                     raise
                 
-                # 等待指定间隔
+                # 等待指定间隔（0.1秒）
                 time.sleep(settings.order_pull_interval)
                 
             except Exception as e:
                 error_msg = str(e)
-                self._log(f"拉取订单错误: {error_msg}")
-                # 检查是否是token失效（单点登录）
-                if "Token已失效" in error_msg or "已在其他地方登录" in error_msg or "401" in error_msg:
-                    # Token失效，停止循环
+                self._log(f"✗ 拉取订单错误: {error_msg}")
+                # 检查是否是token失效或账号过期
+                if "Token已失效" in error_msg or "已在其他地方登录" in error_msg or "账号已过期" in error_msg or "已禁用" in error_msg or "401" in error_msg:
+                    # Token失效或账号过期，停止循环
                     self.running = False
                     if self.on_order_callback:
-                        self.on_order_callback(None, {"error": "登录已失效，请重新登录"})
+                        if "账号已过期" in error_msg or "已禁用" in error_msg:
+                            self.on_order_callback(None, {"error": "账号已过期或已禁用，请重新登录", "expired": True})
+                        else:
+                            self.on_order_callback(None, {"error": "登录已失效，请重新登录"})
                     break
                 
                 if self.on_order_callback:
@@ -149,39 +149,32 @@ class OrderService:
     def _execute_order(self, order: Dict):
         """执行下单"""
         try:
-            self._log(f"准备下单: 金额={self.order_amount}, 交易对={order['symbol_name']}, 方向={order['direction']}")
+            # 根据订单时间周期设置不同的payoutRatio
+            time_increments = order.get("time_increments", "TEN_MINUTE")
+            if time_increments == "THIRTY_MINUTE":
+                payout_ratio = "0.85"  # 30分钟使用0.85
+            else:
+                payout_ratio = "0.80"  # 10分钟使用0.80（默认）
             
-            # TODO: 临时注释掉实际下单，用于测试客户端逻辑
-            # # 调用币安下单
-            # self._log("正在调用币安API下单...")
-            # result = self.binance_service.place_order(
-            #     orderAmount=str(int(self.order_amount)),
-            #     timeIncrements=order["time_increments"],
-            #     symbolName=order["symbol_name"],
-            #     payoutRatio="0.80",
-            #     direction=order["direction"]
-            # )
-            # self._log(f"币安API返回: {result}")
-            
-            # 模拟下单成功（用于测试）
-            self._log("正在执行下单（测试模式）...")
-            result = {
-                "success": True,
-                "code": 200,
-                "message": "下单成功（测试模式）",
-                "data": {
-                    "orderId": "test_order_123",
-                    "symbol": order["symbol_name"],
-                    "direction": order["direction"],
-                    "amount": self.order_amount
-                }
-            }
-            self._log(f"下单成功: {result}")
+            # 调用币安下单
+            result = self.binance_service.place_order(
+                orderAmount=str(int(self.order_amount)),
+                timeIncrements=time_increments,
+                symbolName=order["symbol_name"],
+                payoutRatio=payout_ratio,
+                direction=order["direction"]
+            )
             
             # 记录结果
-            self._log("正在记录订单结果到服务器...")
             self.api_client.record_order_result(order["id"], result)
-            self._log("订单结果已记录")
+            
+            # 下单成功时打印日志（包含时间周期）
+            time_increments = order.get('time_increments', 'N/A')
+            if result.get("success") or result.get("code") == 200:
+                self._log(f"✓ 下单成功: 订单ID={order['id']}, 交易对={order['symbol_name']}, 方向={order['direction']}, 时间周期={time_increments}, 金额={self.order_amount}")
+            else:
+                error_msg = result.get("message") or result.get("error", "未知错误")
+                self._log(f"✗ 下单失败: 订单ID={order['id']}, 错误={error_msg}")
             
             # 调用回调
             if self.on_order_callback:
@@ -190,13 +183,14 @@ class OrderService:
         except Exception as e:
             # 记录错误
             error_msg = str(e)
-            self._log(f"下单失败: {error_msg}")
             error_result = {"success": False, "error": error_msg}
             try:
                 self.api_client.record_order_result(order["id"], error_result)
-                self._log("错误结果已记录到服务器")
             except:
-                self._log("记录错误结果失败")
+                pass
+            
+            # 下单失败时打印日志
+            self._log(f"✗ 下单失败: 订单ID={order.get('id', 'N/A')}, 错误={error_msg}")
             
             if self.on_order_callback:
                 self.on_order_callback(order, error_result)

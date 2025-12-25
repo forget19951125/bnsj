@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     max_order_amount: float = float(os.getenv("MAX_ORDER_AMOUNT", "200.0"))
     
     # 订单拉取间隔（秒）
-    order_pull_interval: int = int(os.getenv("ORDER_PULL_INTERVAL", "1"))
+    order_pull_interval: float = float(os.getenv("ORDER_PULL_INTERVAL", "0.1"))
     
     # 会话有效期（小时）
     session_expire_hours: int = int(os.getenv("SESSION_EXPIRE_HOURS", "24"))

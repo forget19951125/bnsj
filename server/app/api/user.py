@@ -1,7 +1,7 @@
 """
 用户管理API（管理员）
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -110,5 +110,24 @@ def list_users(
             "total": total,
             "list": [user.to_dict() for user in users]
         }
+    )
+
+
+class UserStatusResponse(BaseModel):
+    code: int = 200
+    message: str = "success"
+    data: dict
+
+
+@router.get("/status", response_model=UserStatusResponse)
+def get_user_status(
+    admin_auth: str = Depends(get_admin_auth),
+    db: Session = Depends(get_db)
+):
+    """获取用户状态列表（在线/离线、接单/未接单）"""
+    status_data = UserService.get_user_status_list(db)
+    
+    return UserStatusResponse(
+        data=status_data
     )
 

@@ -110,4 +110,68 @@ class UserService:
     def count_users(db: Session) -> int:
         """获取用户总数"""
         return db.query(User).count()
+    
+    @staticmethod
+    def get_user_status_list(db: Session):
+        """获取用户状态列表（在线/离线、接单/未接单）"""
+        from ..redis_client import get_redis
+        from datetime import datetime
+        redis_client = get_redis()
+        
+        # 获取所有用户
+        all_users = db.query(User).all()
+        
+        online_users = []
+        offline_users = []
+        ordering_users = []
+        not_ordering_users = []
+        
+        for user in all_users:
+            user_dict = user.to_dict()
+            
+            # 检查是否在线（通过心跳判断）
+            # 心跳key在30秒内有效，如果存在且未过期则认为在线
+            is_online = False
+            heartbeat_key = f"user:heartbeat:{user.id}"
+            if redis_client.exists(heartbeat_key):
+                ttl = redis_client.ttl(heartbeat_key)
+                if ttl > 0:
+                    is_online = True
+            
+            # 检查是否正在接单（通过拉取订单时设置的key判断）
+            # 重要：只有在线用户才能显示为接单中
+            # 如果用户离线，即使有接单key也不应该显示为接单中
+            is_ordering = False
+            ordering_key = f"user:ordering:{user.id}"
+            if is_online and redis_client.exists(ordering_key):
+                # 只有在线用户才检查接单状态
+                ttl = redis_client.ttl(ordering_key)
+                if ttl > 0:
+                    is_ordering = True
+                else:
+                    # 已过期，清理key
+                    redis_client.delete(ordering_key)
+            elif not is_online and redis_client.exists(ordering_key):
+                # 用户已离线，但接单key还存在（因为有效期24小时），清理它
+                redis_client.delete(ordering_key)
+            
+            user_dict["is_online"] = is_online
+            user_dict["is_ordering"] = is_ordering
+            
+            if is_online:
+                online_users.append(user_dict)
+            else:
+                offline_users.append(user_dict)
+            
+            if is_ordering:
+                ordering_users.append(user_dict)
+            else:
+                not_ordering_users.append(user_dict)
+        
+        return {
+            "online_users": online_users,
+            "offline_users": offline_users,
+            "ordering_users": ordering_users,
+            "not_ordering_users": not_ordering_users
+        }
 

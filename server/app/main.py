@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from .api import auth, order, user, admin, web3_auth
+from .api import auth, order, user, admin, web3_auth, fib
 from .database import engine, Base
 from .config import settings
 
@@ -35,6 +35,7 @@ app.include_router(order.router)
 app.include_router(user.router)
 app.include_router(admin.router)
 app.include_router(web3_auth.router)
+app.include_router(fib.router)
 
 # 静态文件和模板
 templates = Jinja2Templates(directory="app/templates")
