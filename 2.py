@@ -458,43 +458,43 @@ class ETHRealtimeFib1618Monitor:
         message += f"\n\n💡 该量能K线已包含在斐波那契计算中"
         message += f"\n💡 已同时播报多空双向1.618扩展位"
 
-        if self.dingtalk_webhook_url:
-            try:
-                data_to_send = {
-                    "msgtype": "text",
-                    "text": {
-                        "content": message
-                    },
-                    "at": {
-                        "isAtAll": True
-                    }
-                }
+        # if self.dingtalk_webhook_url:
+        #     try:
+        #         data_to_send = {
+        #             "msgtype": "text",
+        #             "text": {
+        #                 "content": message
+        #             },
+        #             "at": {
+        #                 "isAtAll": True
+        #             }
+        #         }
                 
-                headers = {'Content-Type': 'application/json'}
-                response = requests.post(
-                    self.dingtalk_webhook_url, 
-                    data=json.dumps(data_to_send), 
-                    headers=headers,
-                    timeout=10
-                )
+        #         headers = {'Content-Type': 'application/json'}
+        #         response = requests.post(
+        #             self.dingtalk_webhook_url, 
+        #             data=json.dumps(data_to_send), 
+        #             headers=headers,
+        #             timeout=10
+        #         )
                 
-                if response.status_code == 200:
-                    result = response.json()
-                    if result.get('errcode') == 0:
-                        print("✅ 告警已发送到钉钉（含双向扩展位）")
-                        return True
-                    else:
-                        print(f"❌ 钉钉告警发送失败: {result.get('errmsg')}")
-                        return False
-                else:
-                    print(f"❌ 钉钉告警发送失败，状态码: {response.status_code}")
-                    return False
-            except Exception as e:
-                print(f"❌ 发送钉钉告警失败: {e}")
-                return False
-        else:
-            print("⚠️ 未配置钉钉告警")
-            return False
+        #         if response.status_code == 200:
+        #             result = response.json()
+        #             if result.get('errcode') == 0:
+        #                 print("✅ 告警已发送到钉钉（含双向扩展位）")
+        #                 return True
+        #             else:
+        #                 print(f"❌ 钉钉告警发送失败: {result.get('errmsg')}")
+        #                 return False
+        #         else:
+        #             print(f"❌ 钉钉告警发送失败，状态码: {response.status_code}")
+        #             return False
+        #     except Exception as e:
+        #         print(f"❌ 发送钉钉告警失败: {e}")
+        #         return False
+        # else:
+        #     print("⚠️ 未配置钉钉告警")
+        #     return False
     
     def wait_for_candle_completion(self, trigger_candle_timestamp):
         """
