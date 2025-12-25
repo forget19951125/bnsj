@@ -1,0 +1,15 @@
+-- 管理员表
+USE `bnsj`;
+
+CREATE TABLE IF NOT EXISTS `admins` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '管理员ID',
+    `address` VARCHAR(42) UNIQUE NOT NULL COMMENT '以太坊地址',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX `idx_address` (`address`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员表';
+
+-- 插入默认管理员
+INSERT INTO `admins` (`address`) VALUES ('0x9286e77876ba885043a8c174001719fc93a5ca94') 
+ON DUPLICATE KEY UPDATE `address`=`address`;
+
