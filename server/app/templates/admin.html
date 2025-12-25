@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>币安事件合约群控交易系统 - 后台管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .header {
+            background: #1a1a1a;
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 8px 8px 0 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 0;
+        }
+        
+        .tab {
+            padding: 15px 30px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .tab:hover {
+            background: #f5f5f5;
+        }
+        
+        .tab.active {
+            border-bottom-color: #007bff;
+            color: #007bff;
+            font-weight: bold;
+        }
+        
+        .content {
+            background: white;
+            padding: 30px;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-height: 500px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .table th,
+        .table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .status-1 { background: #d4edda; color: #155724; }
+        .status-2 { background: #fff3cd; color: #856404; }
+        .status-3 { background: #f8d7da; color: #721c24; }
+        
+        #login-section {
+            display: flex;
+            align-items: center;
+        }
+        
+        #wallet-address {
+            color: white;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>币安事件合约群控交易系统 - 后台管理</h1>
+        <div id="login-section" style="margin-top: 10px;">
+            <button id="connect-wallet-btn" class="btn btn-primary" onclick="connectWallet()">连接钱包</button>
+            <span id="wallet-address" style="margin-left: 10px;"></span>
+            <button id="logout-btn" class="btn btn-danger hidden" onclick="logout()" style="margin-left: 10px;">退出登录</button>
+        </div>
+    </div>
+    
+    <div class="container" id="main-content" style="display: none;">
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('orders')">订单管理</div>
+            <div class="tab" onclick="showTab('users')">用户管理</div>
+        </div>
+        
+        <div class="content">
+            <!-- 订单管理 -->
+            <div id="orders-tab">
+                <h2>创建订单</h2>
+                <div id="order-alert"></div>
+                <form id="order-form" onsubmit="createOrder(event)">
+                    <div class="form-group">
+                        <label>订单时间</label>
+                        <input type="hidden" name="time_increments" value="TEN_MINUTE">
+                        <input type="text" value="10分钟" disabled style="background: #f5f5f5; cursor: not-allowed;">
+                    </div>
+                    <div class="form-group">
+                        <label>交易对</label>
+                        <select name="symbol_name" required>
+                            <option value="ETHUSDT" selected>ETHUSDT</option>
+                            <option value="BTCUSDT">BTCUSDT</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>方向</label>
+                        <select name="direction" required>
+                            <option value="LONG">做多 (LONG)</option>
+                            <option value="SHORT">做空 (SHORT)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>有效时间（秒）</label>
+                        <input type="number" name="valid_duration" value="3600" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">创建订单</button>
+                </form>
+                
+                <h2 style="margin-top: 40px;">订单列表</h2>
+                <div id="orders-list"></div>
+            </div>
+            
+            <!-- 用户管理 -->
+            <div id="users-tab" class="hidden">
+                <h2>创建用户</h2>
+                <div id="user-alert"></div>
+                <form id="user-form" onsubmit="createUser(event)">
+                    <div class="form-group">
+                        <label>用户名</label>
+                        <input type="text" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>密码</label>
+                        <input type="password" name="password" required>
+                    </div>
+                    <div class="form-group">
+                        <label>过期时间</label>
+                        <input type="datetime-local" name="expire_at">
+                    </div>
+                    <button type="submit" class="btn btn-primary">创建用户</button>
+                </form>
+                
+                <h2 style="margin-top: 40px;">用户列表</h2>
+                <div id="users-list"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = window.location.origin;
+        let adminToken = null;
+        let walletAddress = null;
+        
+        // 检查是否已登录
+        function checkLogin() {
+            const token = localStorage.getItem('admin_token');
+            const address = localStorage.getItem('wallet_address');
+            if (token && address) {
+                adminToken = token;
+                walletAddress = address;
+                document.getElementById('wallet-address').textContent = address.substring(0, 6) + '...' + address.substring(38);
+                document.getElementById('connect-wallet-btn').classList.add('hidden');
+                document.getElementById('logout-btn').classList.remove('hidden');
+                document.getElementById('main-content').style.display = 'block';
+                loadOrders();
+            } else {
+                document.getElementById('main-content').style.display = 'none';
+            }
+        }
+        
+        // 连接钱包
+        async function connectWallet() {
+            if (typeof window.ethereum === 'undefined') {
+                alert('请安装 MetaMask 或其他 Web3 钱包');
+                return;
+            }
+            
+            try {
+                // 请求账户访问
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                if (accounts.length === 0) {
+                    alert('请授权钱包访问');
+                    return;
+                }
+                
+                walletAddress = accounts[0];
+                
+                // 获取认证消息
+                const messageResponse = await fetch(`${API_BASE}/api/web3/get-auth-message`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ address: walletAddress })
+                });
+                
+                const messageData = await messageResponse.json();
+                if (messageData.code !== 200) {
+                    alert('获取认证消息失败');
+                    return;
+                }
+                
+                const message = messageData.data.message;
+                const timestamp = messageData.data.timestamp;
+                
+                // 请求签名
+                const signature = await window.ethereum.request({
+                    method: 'personal_sign',
+                    params: [message, walletAddress]
+                });
+                
+                // 登录
+                const loginResponse = await fetch(`${API_BASE}/api/web3/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        address: walletAddress,
+                        message: message,
+                        signature: signature,
+                        timestamp: timestamp
+                    })
+                });
+                
+                const loginData = await loginResponse.json();
+                if (loginData.code === 200) {
+                    adminToken = loginData.data.token;
+                    localStorage.setItem('admin_token', adminToken);
+                    localStorage.setItem('wallet_address', walletAddress);
+                    document.getElementById('wallet-address').textContent = walletAddress.substring(0, 6) + '...' + walletAddress.substring(38);
+                    document.getElementById('connect-wallet-btn').classList.add('hidden');
+                    document.getElementById('logout-btn').classList.remove('hidden');
+                    document.getElementById('main-content').style.display = 'block';
+                    loadOrders();
+                } else {
+                    alert('登录失败: ' + (loginData.message || '未知错误'));
+                }
+            } catch (error) {
+                console.error('连接钱包失败:', error);
+                alert('连接钱包失败: ' + error.message);
+            }
+        }
+        
+        // 退出登录
+        function logout() {
+            adminToken = null;
+            walletAddress = null;
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('wallet_address');
+            document.getElementById('wallet-address').textContent = '';
+            document.getElementById('connect-wallet-btn').classList.remove('hidden');
+            document.getElementById('logout-btn').classList.add('hidden');
+            document.getElementById('main-content').style.display = 'none';
+        }
+        
+        // 获取请求头
+        function getHeaders() {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (adminToken) {
+                headers['Authorization'] = `Bearer ${adminToken}`;
+            }
+            return headers;
+        }
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('[id$="-tab"]').forEach(t => t.classList.add('hidden'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + '-tab').classList.remove('hidden');
+            
+            if (tabName === 'orders') {
+                loadOrders();
+            } else if (tabName === 'users') {
+                loadUsers();
+            }
+        }
+        
+        function showAlert(containerId, message, type) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 3000);
+        }
+        
+        async function createOrder(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = {
+                time_increments: formData.get('time_increments'),
+                symbol_name: formData.get('symbol_name'),
+                direction: formData.get('direction'),
+                valid_duration: parseInt(formData.get('valid_duration'))
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/orders/create`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    showAlert('order-alert', '订单创建成功！', 'success');
+                    e.target.reset();
+                    loadOrders();
+                } else {
+                    showAlert('order-alert', result.message || '创建失败', 'error');
+                }
+            } catch (error) {
+                showAlert('order-alert', '创建失败: ' + error.message, 'error');
+            }
+        }
+        
+        async function loadOrders() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/orders`, {
+                    headers: getHeaders()
+                });
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    displayOrders(result.data.list || []);
+                }
+            } catch (error) {
+                console.error('加载订单失败:', error);
+            }
+        }
+        
+        function displayOrders(orders) {
+            const container = document.getElementById('orders-list');
+            if (orders.length === 0) {
+                container.innerHTML = '<p>暂无订单</p>';
+                return;
+            }
+            
+            const statusMap = {1: '待分配', 2: '已分配', 3: '已过期'};
+            const html = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>交易对</th>
+                            <th>方向</th>
+                            <th>订单时间</th>
+                            <th>有效时间</th>
+                            <th>状态</th>
+                            <th>分配次数</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${orders.map(order => `
+                            <tr>
+                                <td>${order.id}</td>
+                                <td>${order.symbol_name}</td>
+                                <td>${order.direction}</td>
+                                <td>${order.time_increments === 'TEN_MINUTE' ? '10分钟' : order.time_increments}</td>
+                                <td>${order.valid_duration}秒</td>
+                                <td><span class="status-badge status-${order.status}">${statusMap[order.status] || '未知'}</span></td>
+                                <td><strong>${order.assignment_count || 0}</strong></td>
+                                <td>${new Date(order.created_at).toLocaleString('zh-CN')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            container.innerHTML = html;
+        }
+        
+        async function createUser(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = {
+                username: formData.get('username'),
+                password: formData.get('password'),
+                expire_at: formData.get('expire_at') || null
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/users/create`, {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    showAlert('user-alert', '用户创建成功！', 'success');
+                    e.target.reset();
+                    loadUsers();
+                } else {
+                    showAlert('user-alert', result.message || '创建失败', 'error');
+                }
+            } catch (error) {
+                showAlert('user-alert', '创建失败: ' + error.message, 'error');
+            }
+        }
+        
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/users?page=1&page_size=100`, {
+                    headers: getHeaders()
+                });
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    displayUsers(result.data.list || []);
+                }
+            } catch (error) {
+                console.error('加载用户失败:', error);
+            }
+        }
+        
+        function displayUsers(users) {
+            const container = document.getElementById('users-list');
+            if (users.length === 0) {
+                container.innerHTML = '<p>暂无用户</p>';
+                return;
+            }
+            
+            const statusMap = {1: '正常', 2: '已过期', 3: '已禁用'};
+            const html = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>用户名</th>
+                            <th>状态</th>
+                            <th>过期时间</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${users.map(user => `
+                            <tr>
+                                <td>${user.id}</td>
+                                <td>${user.username}</td>
+                                <td><span class="status-badge status-${user.status}">${statusMap[user.status] || '未知'}</span></td>
+                                <td>${user.expire_at ? new Date(user.expire_at).toLocaleString('zh-CN') : '永久'}</td>
+                                <td>${new Date(user.created_at).toLocaleString('zh-CN')}</td>
+                                <td>
+                                    <button class="btn btn-primary" onclick="updateUserExpire(${user.id})">更新有效期</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            container.innerHTML = html;
+        }
+        
+        async function updateUserExpire(userId) {
+            const expireAt = prompt('请输入新的过期时间 (格式: 2025-12-31T23:59:59)');
+            if (!expireAt) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/users/${userId}/expire`, {
+                    method: 'PUT',
+                    headers: getHeaders(),
+                    body: JSON.stringify({expire_at: expireAt})
+                });
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    alert('更新成功！');
+                    loadUsers();
+                } else {
+                    alert('更新失败: ' + (result.message || '未知错误'));
+                }
+            } catch (error) {
+                alert('更新失败: ' + error.message);
+            }
+        }
+        
+        // 页面加载时检查登录状态
+        window.onload = function() {
+            checkLogin();
+        };
+        
+        // 监听钱包账户变化
+        if (window.ethereum) {
+            window.ethereum.on('accountsChanged', function(accounts) {
+                if (accounts.length === 0) {
+                    logout();
+                } else if (accounts[0] !== walletAddress) {
+                    logout();
+                    connectWallet();
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+
