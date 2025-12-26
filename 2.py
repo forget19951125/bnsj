@@ -458,6 +458,33 @@ class ETHRealtimeFib1618Monitor:
         message += f"\n\n💡 该量能K线已包含在斐波那契计算中"
         message += f"\n💡 已同时播报多空双向1.618扩展位"
 
+        # 同步30分钟的斐波拉契点位到服务器
+        sync_success = False
+        if '30min' in fib_data and fib_data['30min']:
+            try:
+                sync_url = "http://104.194.155.10:8000/api/fib/sync-levels"
+                sync_data = {
+                    "up_data": fib_data['30min'].get('up'),
+                    "down_data": fib_data['30min'].get('down')
+                }
+                sync_response = requests.post(
+                    sync_url, 
+                    json=sync_data, 
+                    headers={'Content-Type': 'application/json'},
+                    timeout=5
+                )
+                if sync_response.status_code == 200:
+                    result = sync_response.json()
+                    if result.get("code") == 200:
+                        print(f"✅ 斐波拉契点位已同步到服务器 (30分钟双向点位)")
+                        sync_success = True
+                    else:
+                        print(f"⚠️ 同步点位失败: {result.get('message', '未知错误')}")
+                else:
+                    print(f"⚠️ 同步点位失败，HTTP状态码: {sync_response.status_code}")
+            except Exception as e:
+                print(f"⚠️ 同步点位到服务器失败: {e}")
+        
         # if self.dingtalk_webhook_url:
         #     try:
         #         data_to_send = {
