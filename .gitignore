@@ -56,6 +56,9 @@ binance_token.json
 playwright-binance*/
 playwright-binance-*/
 
+# Browser files (too large for git)
+client/google_web/
+
 # OS
 .DS_Store
 Thumbs.db
