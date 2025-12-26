@@ -318,8 +318,35 @@ class PriceMonitor:
         self.is_running = True
         
         def monitor_loop():
+            last_minute = -1  # 记录上次计算的分钟数
             while self.is_running:
                 try:
+                    # 获取当前时间
+                    current_time = time.time()
+                    current_second = int(current_time) % 60
+                    current_minute = int(current_time // 60) % 60
+                    
+                    # 在每分钟的第1秒（K线完成时）自动计算并缓存斐波拉契点位
+                    if current_second == 1 and current_minute != last_minute:
+                        last_minute = current_minute
+                        try:
+                            print(f"📐 [{time.strftime('%H:%M:%S')}] 自动计算30分钟斐波拉契扩展位...")
+                            fib_result = self.fib_service.calculate_fib_1618_30min(include_latest_completed=True)
+                            if fib_result:
+                                up_data = fib_result.get('up')
+                                down_data = fib_result.get('down')
+                                success = self.fib_service.cache_fib_levels(up_data=up_data, down_data=down_data)
+                                if success:
+                                    up_str = f"${up_data['fib_1618']:.2f}" if up_data else "N/A"
+                                    down_str = f"${down_data['fib_1618']:.2f}" if down_data else "N/A"
+                                    print(f"✓ 斐波拉契点位已更新: 上升={up_str}, 下降={down_str}")
+                                else:
+                                    print(f"⚠️ 缓存斐波拉契点位失败")
+                            else:
+                                print(f"⚠️ 计算斐波拉契点位失败或数据不足")
+                        except Exception as e:
+                            print(f"[ERROR] 自动计算斐波拉契点位失败: {e}")
+                    
                     # 每次创建新的数据库会话
                     db = SessionLocal()
                     try:
@@ -334,7 +361,7 @@ class PriceMonitor:
         
         self.monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
         self.monitor_thread.start()
-        print("✓ 价格监控已启动（每秒检查一次）")
+        print("✓ 价格监控已启动（每秒检查一次，每分钟第1秒自动计算斐波拉契点位）")
     
     def stop_monitoring(self):
         """停止价格监控"""
