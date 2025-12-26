@@ -1,6 +1,7 @@
 """
 价格监控服务
 每秒获取ETHUSDT合约价格，计算RSI，检查是否触发订单生成
+触发逻辑与2.py保持一致：只有当量能达到阈值时才计算斐波拉契
 """
 import ccxt
 import pandas as pd
@@ -42,6 +43,12 @@ class PriceMonitor:
         self.price_tolerance = 0.01  # 价格容差（避免频繁触发）
         self.lock = threading.Lock()  # 防止重复生成订单
         self.last_error = None  # 记录最后一次错误
+        
+        # 量能触发相关（与2.py保持一致）
+        self.volume_threshold = 45000  # 量能阈值：45k
+        self.volume_triggered = False  # 量能触发标记
+        self.trigger_timestamp = None  # 触发时间戳
+        self.trigger_candle_timestamp = None  # 触发时的K线时间戳
     
     def calculate_rsi(self, period: int = 14, include_latest: bool = True) -> Optional[float]:
         """
@@ -126,20 +133,71 @@ class PriceMonitor:
                 print(f"[WARN] 币安API地区限制，请配置代理或使用其他数据源")
             return None
     
-    def get_last_completed_candle(self) -> Optional[dict]:
+    def get_realtime_volume(self) -> Optional[dict]:
         """
-        获取上一根已完成的分钟K线数据
-        返回: {'open': float, 'close': float, 'high': float, 'low': float, 'timestamp': int}
+        获取实时量能（当前正在形成的1分钟K线）
+        返回: {'timestamp': int, 'volume': float, 'price': float, ...}
+        """
+        try:
+            ohlcv = self.exchange.fetch_ohlcv(self.symbol, '1m', limit=1)
+            
+            if ohlcv and len(ohlcv) > 0:
+                candle = ohlcv[0]
+                timestamp = candle[0]
+                volume = candle[5]  # 实时成交量
+                close_price = candle[4]  # 当前价格
+                open_price = candle[1]
+                
+                # 判断涨跌
+                is_up = close_price >= open_price
+                bar_color = "🟢" if is_up else "🔴"
+                price_change_pct = ((close_price - open_price) / open_price) * 100 if open_price > 0 else 0
+                
+                return {
+                    'timestamp': timestamp,
+                    'volume': volume,
+                    'price': close_price,
+                    'bar_color': bar_color,
+                    'price_change_pct': price_change_pct,
+                    'open': open_price,
+                    'high': candle[2],
+                    'low': candle[3]
+                }
+            return None
+        except Exception as e:
+            print(f"获取实时量能失败: {e}")
+            return None
+    
+    def get_completed_candle_data(self, target_timestamp: Optional[int] = None) -> Optional[dict]:
+        """
+        获取已完成的K线数据
+        target_timestamp: 目标K线时间戳，如果为None则返回最新完成的K线
         """
         try:
             # 获取最近的K线数据（至少2根，最后一根可能正在形成）
-            ohlcv = self.exchange.fetch_ohlcv(self.symbol, '1m', limit=2)
+            ohlcv = self.exchange.fetch_ohlcv(self.symbol, '1m', limit=10)
             
             if not ohlcv or len(ohlcv) < 2:
                 return None
             
-            # 返回倒数第二根K线（上一根已完成的）
-            candle = ohlcv[-2]
+            # 如果指定了目标时间戳，查找匹配的K线
+            if target_timestamp:
+                for candle in reversed(ohlcv[:-1]):  # 排除最后一根未完成的
+                    if candle[0] == target_timestamp:
+                        return {
+                            'timestamp': candle[0],
+                            'open': float(candle[1]),
+                            'high': float(candle[2]),
+                            'low': float(candle[3]),
+                            'close': float(candle[4]),
+                            'volume': float(candle[5])
+                        }
+                # 如果没找到，返回最新完成的K线
+                candle = ohlcv[-2]
+            else:
+                # 返回最新完成的K线（倒数第二根）
+                candle = ohlcv[-2]
+            
             return {
                 'timestamp': candle[0],
                 'open': float(candle[1]),
@@ -149,8 +207,66 @@ class PriceMonitor:
                 'volume': float(candle[5])
             }
         except Exception as e:
-            print(f"获取上一根K线数据失败: {e}")
+            print(f"获取已完成K线数据失败: {e}")
             return None
+    
+    def wait_for_candle_completion(self, trigger_candle_timestamp: int) -> bool:
+        """
+        等待触发量能的K线完成
+        trigger_candle_timestamp: 触发时的K线时间戳
+        """
+        try:
+            print(f"⏳ 等待K线完成 (时间戳: {trigger_candle_timestamp})...")
+            
+            wait_start = time.time()
+            max_wait = 70  # 最多等待70秒
+            
+            while time.time() - wait_start < max_wait:
+                # 获取最新的K线数据
+                current_data = self.get_realtime_volume()
+                
+                if current_data:
+                    current_timestamp = current_data['timestamp']
+                    
+                    # 如果当前K线的时间戳已经不同于触发时的时间戳
+                    # 说明新的K线已经开始，触发的K线已经完成
+                    if current_timestamp > trigger_candle_timestamp:
+                        print(f"\n✅ K线已完成！新K线时间戳: {current_timestamp}")
+                        # 额外等待2秒确保数据同步
+                        time.sleep(2)
+                        return True
+                    
+                    # 计算还需等待的时间
+                    from datetime import datetime
+                    current_time = datetime.now()
+                    seconds_in_minute = current_time.second
+                    remaining = 60 - seconds_in_minute
+                    
+                    # 显示倒计时
+                    print(f"\r⏰ 等待K线完成: 约{remaining}秒", end="", flush=True)
+                
+                time.sleep(1)
+            
+            print(f"\n⚠️ 等待超时，继续执行...")
+            return True
+            
+        except Exception as e:
+            print(f"\n等待K线完成时出错: {e}")
+            return False
+    
+    def _reset_trigger(self):
+        """重置触发标记（60秒后）"""
+        self.volume_triggered = False
+        self.trigger_timestamp = None
+        self.trigger_candle_timestamp = None
+        print("🔄 触发标记已重置，可以再次检测量能")
+    
+    def get_last_completed_candle(self) -> Optional[dict]:
+        """
+        获取上一根已完成的分钟K线数据
+        返回: {'open': float, 'close': float, 'high': float, 'low': float, 'timestamp': int}
+        """
+        return self.get_completed_candle_data()
     
     def check_short_price_condition(self, current_price: float) -> bool:
         """
@@ -310,7 +426,10 @@ class PriceMonitor:
                 self.lock.release()
     
     def start_monitoring(self, db: Session = None):
-        """启动价格监控（每秒检查一次）"""
+        """
+        启动价格监控（每秒检查一次）
+        触发逻辑与2.py保持一致：只有当量能达到阈值时才计算斐波拉契
+        """
         if self.is_running:
             print("价格监控已在运行")
             return
@@ -318,34 +437,77 @@ class PriceMonitor:
         self.is_running = True
         
         def monitor_loop():
-            last_minute = -1  # 记录上次计算的分钟数
             while self.is_running:
                 try:
-                    # 获取当前时间
-                    current_time = time.time()
-                    current_second = int(current_time) % 60
-                    current_minute = int(current_time // 60) % 60
+                    # 获取实时量能
+                    volume_data = self.get_realtime_volume()
                     
-                    # 在每分钟的第1秒（K线完成时）自动计算并缓存斐波拉契点位
-                    if current_second == 1 and current_minute != last_minute:
-                        last_minute = current_minute
-                        try:
-                            print(f"📐 [{time.strftime('%H:%M:%S')}] 自动计算30分钟斐波拉契扩展位...")
-                            fib_result = self.fib_service.calculate_fib_1618_30min(include_latest_completed=True)
-                            if fib_result:
-                                up_data = fib_result.get('up')
-                                down_data = fib_result.get('down')
-                                success = self.fib_service.cache_fib_levels(up_data=up_data, down_data=down_data)
-                                if success:
-                                    up_str = f"${up_data['fib_1618']:.2f}" if up_data else "N/A"
-                                    down_str = f"${down_data['fib_1618']:.2f}" if down_data else "N/A"
-                                    print(f"✓ 斐波拉契点位已更新: 上升={up_str}, 下降={down_str}")
+                    if volume_data:
+                        current_volume = volume_data['volume']
+                        current_timestamp = volume_data['timestamp']
+                        
+                        # 检测到量能达到阈值且还未触发（与2.py逻辑一致）
+                        if current_volume >= self.volume_threshold and not self.volume_triggered:
+                            print(f"\n\n🚨 量能达到阈值！")
+                            print(f"📍 触发时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+                            print(f"📊 当前量能: {current_volume:,.0f}")
+                            
+                            # 标记已触发，记录K线时间戳
+                            self.volume_triggered = True
+                            self.trigger_timestamp = time.time()
+                            self.trigger_candle_timestamp = current_timestamp
+                            
+                            print(f"⏳ 准备等待K线完成...")
+                            
+                            # 等待当前K线完成
+                            wait_success = self.wait_for_candle_completion(current_timestamp)
+                            
+                            if wait_success:
+                                print(f"✅ K线已完成，开始获取完整数据...")
+                                
+                                # 获取完整的K线数据（包括刚刚完成的触发K线）
+                                completed_volume_data = self.get_completed_candle_data(current_timestamp)
+                                
+                                if completed_volume_data is None:
+                                    print(f"⚠️ 未能获取到指定K线，使用最新完成的K线")
+                                    completed_volume_data = self.get_completed_candle_data()
+                                
+                                if completed_volume_data:
+                                    print(f"📊 完整量能: {completed_volume_data['volume']:,.0f}")
+                                    
+                                    # 计算斐波那契扩展位（包含最新完成的K线，双向）
+                                    print(f"📐 正在计算双向斐波那契扩展位（包含触发K线）...")
+                                    fib_result = self.fib_service.calculate_fib_1618_30min(include_latest_completed=True)
+                                    
+                                    if fib_result:
+                                        up_data = fib_result.get('up')
+                                        down_data = fib_result.get('down')
+                                        
+                                        # 显示计算结果
+                                        up_status = "✅" if up_data else "⚠️"
+                                        down_status = "✅" if down_data else "⚠️"
+                                        print(f"{up_status}/{down_status} 30min 斐波那契计算完成（上升/下降）")
+                                        
+                                        # 缓存斐波拉契点位
+                                        success = self.fib_service.cache_fib_levels(up_data=up_data, down_data=down_data)
+                                        if success:
+                                            up_str = f"${up_data['fib_1618']:.2f}" if up_data else "N/A"
+                                            down_str = f"${down_data['fib_1618']:.2f}" if down_data else "N/A"
+                                            print(f"✓ 斐波拉契点位已缓存: 上升={up_str}, 下降={down_str}")
+                                        else:
+                                            print(f"⚠️ 缓存斐波拉契点位失败")
+                                    else:
+                                        print(f"⚠️ 计算斐波拉契点位失败或数据不足")
+                                    
+                                    # 重置触发标记（60秒后）
+                                    print(f"⏰ 将在60秒后重置触发标记\n")
+                                    threading.Timer(60, self._reset_trigger).start()
                                 else:
-                                    print(f"⚠️ 缓存斐波拉契点位失败")
+                                    print(f"❌ 无法获取完整K线数据")
+                                    self.volume_triggered = False
                             else:
-                                print(f"⚠️ 计算斐波拉契点位失败或数据不足")
-                        except Exception as e:
-                            print(f"[ERROR] 自动计算斐波拉契点位失败: {e}")
+                                print(f"❌ 等待K线完成失败")
+                                self.volume_triggered = False
                     
                     # 每次创建新的数据库会话
                     db = SessionLocal()
@@ -361,7 +523,7 @@ class PriceMonitor:
         
         self.monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
         self.monitor_thread.start()
-        print("✓ 价格监控已启动（每秒检查一次，每分钟第1秒自动计算斐波拉契点位）")
+        print(f"✓ 价格监控已启动（每秒检查一次，量能阈值: {self.volume_threshold:,}）")
     
     def stop_monitoring(self):
         """停止价格监控"""
