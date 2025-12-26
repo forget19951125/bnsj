@@ -439,6 +439,10 @@ class PriceMonitor:
         def monitor_loop():
             while self.is_running:
                 try:
+                    # 每次循环都获取最新价格并计算RSI（确保价格和RSI总是最新的）
+                    current_price = self.get_ethusdt_price()
+                    current_rsi = self.calculate_rsi(include_latest=True)
+                    
                     # 获取实时量能
                     volume_data = self.get_realtime_volume()
                     

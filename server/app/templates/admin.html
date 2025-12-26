@@ -360,8 +360,8 @@
                         loadOrders();
                         loadUsers();
                         loadFibLevels();
-                        // 每5秒刷新一次斐波拉契点位
-                        setInterval(loadFibLevels, 5000);
+                        // 每秒刷新一次价格和RSI
+                        setInterval(loadFibLevels, 1000);
                         return true;
                     } else {
                         // Token无效，清除并跳转到登录页面
