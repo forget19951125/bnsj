@@ -450,7 +450,7 @@ class PriceMonitor:
                         if current_volume >= self.volume_threshold and not self.volume_triggered:
                             print(f"\n\n🚨 量能达到阈值！")
                             print(f"📍 触发时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-                            print(f"📊 当前量能: {current_volume:,.0f}")
+                            print(f"📊 当前量能: {current_volume:,.0f} (阈值: {self.volume_threshold:,})")
                             
                             # 标记已触发，记录K线时间戳
                             self.volume_triggered = True
