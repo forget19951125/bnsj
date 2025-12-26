@@ -87,11 +87,19 @@ class PriceMonitor:
                 avg_loss[i] = (avg_loss[i-1] * (period - 1) + loss[i]) / period
             
             # 计算RS和RSI
-            rs = avg_gain / avg_loss
+            # 避免除以0的情况（使用很小的阈值避免浮点数精度问题）
+            final_avg_loss = avg_loss[-1]
+            final_avg_gain = avg_gain[-1]
+            
+            if final_avg_loss < 1e-10:  # 使用很小的阈值，避免浮点数精度问题
+                # 如果平均损失接近0，说明没有下跌，RSI应该是100
+                return 100.0
+            
+            rs = final_avg_gain / final_avg_loss
             rsi = 100 - (100 / (1 + rs))
             
             # 返回最新的RSI值
-            return float(rsi[-1])
+            return float(rsi)
             
         except Exception as e:
             error_msg = str(e)

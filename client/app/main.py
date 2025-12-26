@@ -125,8 +125,21 @@ class ClientApp:
             error_msg = str(e)
             print(f"登录异常: {error_msg}")
             traceback.print_exc()
-            if "Token已失效" in error_msg or "已在其他地方登录" in error_msg:
+            
+            # 提取更详细的错误信息
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                if "用户名或密码错误" in error_msg or "账号已过期" in error_msg:
+                    # 保持原有错误信息
+                    pass
+                else:
+                    error_msg = "用户名或密码错误，或账号已过期"
+            elif "Connection" in error_msg or "timeout" in error_msg or "网络" in error_msg or "无法连接" in error_msg:
+                error_msg = f"无法连接到服务器 {settings.server_url}，请检查网络连接"
+            elif "404" in error_msg:
+                error_msg = f"服务器地址错误: {settings.server_url}"
+            elif "Token已失效" in error_msg or "已在其他地方登录" in error_msg:
                 error_msg = "账号已在其他地方登录，请重新登录"
+            
             if self.login_window:
                 self.login_window.show_error(f"登录失败: {error_msg}")
     

@@ -27,18 +27,40 @@ class APIClient:
     def login(self, username: str, password: str) -> Dict[str, Any]:
         """用户登录"""
         url = f"{self.base_url}/api/auth/login"
-        response = requests.post(
-            url,
-            json={"username": username, "password": password},
-            headers={"Content-Type": "application/json"}
-        )
-        response.raise_for_status()
-        data = response.json()
-        
-        if data.get("code") == 200 and data.get("data"):
-            self.set_token(data["data"]["token"])
-        
-        return data
+        try:
+            response = requests.post(
+                url,
+                json={"username": username, "password": password},
+                headers={"Content-Type": "application/json"},
+                timeout=10  # 添加超时设置
+            )
+            
+            # 如果状态码不是200，尝试解析错误信息
+            if response.status_code != 200:
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("detail", f"HTTP {response.status_code} 错误")
+                    raise requests.HTTPError(f"{error_msg}", response=response)
+                except ValueError:
+                    # 如果不是JSON格式，使用状态码文本
+                    response.raise_for_status()
+            
+            data = response.json()
+            
+            if data.get("code") == 200 and data.get("data"):
+                self.set_token(data["data"]["token"])
+            
+            return data
+        except requests.exceptions.RequestException as e:
+            # 网络错误或HTTP错误
+            error_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get("detail", error_msg)
+                except:
+                    pass
+            raise Exception(f"登录失败: {error_msg}")
     
     def verify_token(self) -> Dict[str, Any]:
         """验证Token"""
