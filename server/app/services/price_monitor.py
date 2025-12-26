@@ -403,9 +403,9 @@ class PriceMonitor:
                     time_increments='TEN_MINUTE',
                     symbol_name='ETHUSDT',
                     direction=direction,
-                    valid_duration=600  # 10分钟 = 600秒
+                    valid_duration=5  # 订单有效期：5秒
                 )
-                print(f"✓ 创建10分钟订单: ID={order_10min.id}, 方向={direction}, 价格={price:.2f}, RSI={rsi:.2f}")
+                print(f"✓ 创建10分钟订单: ID={order_10min.id}, 方向={direction}, 价格={price:.2f}, RSI={rsi:.2f}, 有效期=5秒")
                 
                 # 创建30分钟订单
                 order_30min = OrderService.create_order(
@@ -413,9 +413,9 @@ class PriceMonitor:
                     time_increments='THIRTY_MINUTE',
                     symbol_name='ETHUSDT',
                     direction=direction,
-                    valid_duration=1800  # 30分钟 = 1800秒
+                    valid_duration=5  # 订单有效期：5秒
                 )
-                print(f"✓ 创建30分钟订单: ID={order_30min.id}, 方向={direction}, 价格={price:.2f}, RSI={rsi:.2f}")
+                print(f"✓ 创建30分钟订单: ID={order_30min.id}, 方向={direction}, 价格={price:.2f}, RSI={rsi:.2f}, 有效期=5秒")
                 
             finally:
                 self.lock.release()
