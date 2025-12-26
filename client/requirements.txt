@@ -5,4 +5,6 @@ pillow==11.3.0
 pydantic==2.5.0
 pydantic-settings>=2.0.0
 PyQt5>=5.15.0
+# 注意: PyQt5在Windows上需要Qt运行时库
+# 如果遇到Qt环境问题，可以尝试安装: pip install PyQt5-Qt5
 

@@ -26,13 +26,23 @@ class BinanceService:
     
     def _log(self, message: str):
         """输出日志（优先使用回调，否则使用print）"""
-        if self.log_callback:
+        try:
+            if self.log_callback:
+                try:
+                    self.log_callback(message)
+                except Exception as e:
+                    # 如果回调失败，也输出到控制台
+                    print(f"[日志回调失败] {e}")
+                    print(f"[BinanceService] {message}")
+            else:
+                print(f"[BinanceService] {message}")
+        except Exception as e:
+            # 即使日志输出失败，也要尝试打印
             try:
-                self.log_callback(message)
-            except Exception:
-                print(message)
-        else:
-            print(message)
+                print(f"[BinanceService日志错误] {e}")
+                print(f"[BinanceService] {message}")
+            except:
+                pass
     
     def login(self, reset: bool = True, headless: bool = False, qr_callback: Optional[Callable] = None, user_id: Optional[int] = None) -> Optional[Dict]:
         """币安登录
@@ -47,9 +57,69 @@ class BinanceService:
         import os
         # 设置环境变量尝试绕过版本检查
         os.environ['_PLAYWRIGHT_SKIP_VALIDATE'] = '1'
+        
+        # 安全的print函数
+        def safe_print(*args, **kwargs):
+            try:
+                print(*args, **kwargs)
+            except UnicodeEncodeError:
+                try:
+                    safe_args = [str(arg).encode('ascii', 'replace').decode('ascii') if isinstance(arg, str) else arg for arg in args]
+                    print(*safe_args, **kwargs)
+                except:
+                    print("[打印错误]")
+        
+        # 确保日志回调已设置
+        safe_print("[DEBUG] BinanceService.login() - 开始执行")
+        self._log("准备调用get_token函数启动浏览器...")
+        safe_print("[DEBUG] BinanceService.login() - 已输出第一条日志")
+        self._log(f"参数: reset={reset}, headless={headless}, user_id={user_id}")
+        self._log(f"日志回调状态: {self.log_callback is not None}")
+        safe_print(f"[DEBUG] BinanceService.login() - 日志回调: {self.log_callback is not None}")
+        
+        safe_print("[DEBUG] BinanceService.login() - 准备导入get_token")
         from ..binance_client import get_token
+        safe_print("[DEBUG] BinanceService.login() - get_token导入成功")
+        
         # 每次登录都清理缓存，支持多账号
-        token_info = get_token(reset=reset, headless=headless, qr_callback=qr_callback, user_id=user_id, log_callback=self.log_callback)
+        try:
+            self._log("正在调用get_token函数...")
+            safe_print("[DEBUG] BinanceService.login() - 准备调用get_token()")
+            safe_print(f"[DEBUG] BinanceService.login() - log_callback状态: {self.log_callback is not None}")
+            safe_print(f"[DEBUG] BinanceService.login() - 参数: reset={reset}, headless={headless}, user_id={user_id}")
+            try:
+                token_info = get_token(reset=reset, headless=headless, qr_callback=qr_callback, user_id=user_id, log_callback=self.log_callback)
+                safe_print(f"[DEBUG] BinanceService.login() - get_token()返回: {token_info is not None}")
+                self._log(f"get_token返回结果: {token_info is not None}")
+            except Exception as get_token_error:
+                safe_print(f"[DEBUG] BinanceService.login() - get_token()抛出异常: {get_token_error}")
+                import traceback
+                try:
+                    trace_str = traceback.format_exc()
+                    safe_print(f"[DEBUG] BinanceService.login() - 异常堆栈:\n{trace_str}")
+                except:
+                    safe_print("[DEBUG] BinanceService.login() - 无法输出异常堆栈")
+                raise
+        except KeyboardInterrupt:
+            self._log("用户中断登录")
+            return None  # 返回None而不是抛出异常
+        except SystemExit:
+            self._log("系统退出")
+            return None  # 返回None而不是抛出异常
+        except Exception as e:
+            error_msg = f"get_token函数执行失败: {str(e)}"
+            try:
+                self._log(error_msg)
+                import traceback
+                try:
+                    error_trace = traceback.format_exc()
+                    self._log(f"详细错误信息:\n{error_trace}")
+                except:
+                    self._log("无法输出详细错误信息")
+            except:
+                safe_print(f"[ERROR] get_token函数执行失败: {e}")
+            # 不重新抛出异常，返回None表示失败
+            return None
         if token_info:
             self._log("✓ 收到Token信息，保存到内存...")
             # 只保存到内存，不保存到文件

@@ -1,38 +1,24 @@
-#!/usr/bin/env python3
-"""最简单的测试脚本"""
+"""
+最简单的测试脚本
+"""
 import sys
 import os
 
-# Patch platform BEFORE anything else
-import platform
-_original_mac_ver = platform.mac_ver
-platform.mac_ver = lambda: ('26.0', '', 'arm64')
+print("测试1: 基本输出")
+print("测试2: 中文输出")
+print(f"Python版本: {sys.version}")
+print(f"当前目录: {os.getcwd()}")
 
-os.environ['PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD'] = '1'
+# 测试代理设置
+proxy = "http://127.0.0.1:7890"
+print(f"\n代理设置: {proxy}")
 
-print("Testing simple GUI...")
+# 设置环境变量
+os.environ['HTTP_PROXY'] = proxy
+os.environ['HTTPS_PROXY'] = proxy
 
-try:
-    import tkinter as tk
-    print("✓ tkinter imported")
-    
-    root = tk.Tk()
-    root.title("测试窗口")
-    root.geometry("400x250")
-    
-    label = tk.Label(root, text="如果看到这个窗口，说明GUI正常")
-    label.pack(pady=50)
-    
-    print("✓ Window created, showing for 5 seconds...")
-    root.after(5000, root.destroy)
-    root.mainloop()
-    
-    print("✓ Test completed")
-    
-except Exception as e:
-    print(f"✗ Error: {e}")
-    import traceback
-    traceback.print_exc()
-finally:
-    platform.mac_ver = _original_mac_ver
+print("\n环境变量已设置")
+print(f"HTTP_PROXY: {os.environ.get('HTTP_PROXY', 'Not set')}")
+print(f"HTTPS_PROXY: {os.environ.get('HTTPS_PROXY', 'Not set')}")
 
+print("\n测试完成")

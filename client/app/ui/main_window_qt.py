@@ -51,13 +51,46 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event: QCloseEvent):
         """窗口关闭事件"""
+        import sys
+        import traceback
+        from ..utils.logger import debug, error, get_log_file
+        
+        debug("MainWindow.closeEvent() - 被调用")
+        debug(f"MainWindow.closeEvent() - on_close={self.on_close}")
+        debug("MainWindow.closeEvent() - 调用堆栈:")
+        try:
+            stack = traceback.format_stack()
+            for line in stack:
+                debug(f"  {line.strip()}")
+        except:
+            pass
+        
+        # 只有在用户明确关闭窗口时才调用on_close
+        # 这可以防止浏览器关闭等操作意外触发窗口关闭
         if self.on_close:
-            self.on_close()
+            # 确认用户是否真的要退出
+            from PyQt5.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self,
+                '确认退出',
+                '确定要退出程序吗？',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                debug("MainWindow.closeEvent() - 用户确认退出，调用on_close()")
+                self.on_close()
+            else:
+                debug("MainWindow.closeEvent() - 用户取消退出")
+                event.ignore()  # 取消关闭
+                return
         else:
             # 默认退出程序
+            error("MainWindow.closeEvent() - on_close为None，退出QApplication")
             from PyQt5.QtWidgets import QApplication
             QApplication.instance().quit()
         event.accept()
+        debug("MainWindow.closeEvent() - 事件已接受")
     
     def init_ui(self):
         """初始化UI"""
@@ -186,29 +219,70 @@ class MainWindow(QMainWindow):
     
     def set_binance_logged_in(self, logged_in: bool):
         """设置币安登录状态"""
-        print(f"set_binance_logged_in被调用: logged_in={logged_in}")
+        def safe_print(*args, **kwargs):
+            """安全地打印文本，处理编码错误"""
+            try:
+                print(*args, **kwargs)
+            except UnicodeEncodeError:
+                try:
+                    safe_args = []
+                    for arg in args:
+                        if isinstance(arg, str):
+                            safe_args.append(arg.encode('ascii', 'replace').decode('ascii'))
+                        else:
+                            safe_args.append(arg)
+                    print(*safe_args, **kwargs)
+                except:
+                    pass
+            except:
+                pass
+        
+        safe_print(f"set_binance_logged_in被调用: logged_in={logged_in}")
         self.binance_logged_in = logged_in
         if logged_in:
             self.binance_status_label.setText("币安: 已登录")
             self.binance_status_label.setStyleSheet("color: green;")
             self.binance_login_btn.setText("重新登录币安")
-            self.log("✓ 币安登录状态已更新为：已登录")
-            print("✓ GUI状态已更新为：已登录")
+            self.log("[OK] 币安登录状态已更新为：已登录")
+            safe_print("[OK] GUI状态已更新为：已登录")
         else:
             self.binance_status_label.setText("币安: 未登录")
             self.binance_status_label.setStyleSheet("color: red;")
             self.binance_login_btn.setText("登录币安账号")
             self.log("币安登录状态已更新为：未登录")
-            print("GUI状态已更新为：未登录")
+            safe_print("GUI状态已更新为：未登录")
     
     def log(self, message: str):
         """添加日志"""
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.log_area.append(f"[{timestamp}] {message}")
-        # 自动滚动到底部
-        scrollbar = self.log_area.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        try:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            # 安全地处理Unicode字符，避免编码错误
+            try:
+                log_text = f"[{timestamp}] {message}"
+                self.log_area.append(log_text)
+            except UnicodeEncodeError:
+                # 如果编码失败，尝试替换Unicode字符
+                safe_message = message.encode('ascii', 'replace').decode('ascii')
+                log_text = f"[{timestamp}] {safe_message}"
+                self.log_area.append(log_text)
+            except Exception as e:
+                # 如果还是失败，使用最基本的ASCII字符
+                try:
+                    safe_message = str(message).encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+                    log_text = f"[{timestamp}] {safe_message}"
+                    self.log_area.append(log_text)
+                except:
+                    self.log_area.append(f"[{timestamp}] [日志编码错误]")
+            # 自动滚动到底部
+            scrollbar = self.log_area.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+        except Exception as e:
+            # 如果日志输出完全失败，至少尝试输出到控制台
+            try:
+                print(f"[日志输出失败] {e}")
+            except:
+                pass
     
     def _update_timers(self):
         """更新倒计时显示"""

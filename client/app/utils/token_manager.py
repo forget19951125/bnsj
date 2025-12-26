@@ -70,9 +70,15 @@ class TokenManager:
             os.makedirs(os.path.dirname(self.binance_token_file) if os.path.dirname(self.binance_token_file) else ".", exist_ok=True)
             with open(self.binance_token_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            print(f"✓ Token已保存到: {self.binance_token_file}")
+            try:
+                print(f"[OK] Token已保存到: {self.binance_token_file}")
+            except UnicodeEncodeError:
+                print(f"[OK] Token已保存到: {self.binance_token_file}")
         except Exception as e:
-            print(f"✗ Token保存失败: {e}")
+            try:
+                print(f"[ERROR] Token保存失败: {e}")
+            except UnicodeEncodeError:
+                print(f"[ERROR] Token保存失败: {e}")
             import traceback
             traceback.print_exc()
             raise

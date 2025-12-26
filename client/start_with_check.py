@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-客户端启动脚本
+带Qt环境检查的客户端启动脚本
+在启动客户端前自动检查Qt环境
 """
 import sys
 import os
@@ -97,20 +98,80 @@ if sys.platform == 'win32' and not os.environ.get('QT_PLUGIN_PATH'):
 # 忽略警告
 warnings.filterwarnings('ignore')
 
-def main():
+def check_qt_before_start():
+    """启动前检查Qt环境"""
+    print("=" * 60)
+    print("正在检查Qt环境...")
+    print("=" * 60)
+    
+    # 检查PyQt5是否安装
     try:
+        import PyQt5
+        from PyQt5.QtWidgets import QApplication
+        from PyQt5.QtCore import QCoreApplication
+        
+        # 尝试创建QApplication（不显示窗口）
+        app = QApplication(sys.argv)
+        app.quit()
+        
+        print("✓ Qt环境检查通过")
+        print(f"  PyQt5版本: {PyQt5.QtCore.PYQT_VERSION_STR}")
+        print(f"  Qt版本: {PyQt5.QtCore.QT_VERSION_STR}")
+        print()
+        return True
+        
+    except ImportError as e:
+        print("✗ PyQt5未安装")
+        print(f"  错误: {e}")
+        print()
+        print("解决方案:")
+        print("  1. 运行安装脚本: install_qt_env.bat (Windows) 或 install_qt_env.sh (Linux/Mac)")
+        print("  2. 或手动安装: pip install PyQt5>=5.15.0")
+        print()
+        return False
+        
+    except Exception as e:
+        print("✗ Qt环境检查失败")
+        print(f"  错误: {e}")
+        print()
+        print("解决方案:")
+        print("  1. 运行诊断脚本: python check_qt_env.py")
+        print("  2. 重新安装PyQt5: pip uninstall PyQt5 && pip install PyQt5>=5.15.0")
+        print("  3. Windows系统可以尝试: pip install PyQt5-Qt5")
+        print()
+        return False
+
+def main():
+    """主函数"""
+    # 先检查Qt环境
+    if not check_qt_before_start():
+        print("=" * 60)
+        print("Qt环境检查失败，无法启动客户端")
+        print("请按照上面的提示解决Qt环境问题后重试")
+        print("=" * 60)
+        input("按回车键退出...")
+        sys.exit(1)
+    
+    # Qt环境正常，启动客户端
+    try:
+        print("=" * 60)
         print("正在启动客户端...")
+        print("=" * 60)
+        print()
+        
         from app.main import ClientApp
         
         app = ClientApp()
         print("客户端已初始化，显示登录窗口...")
         app.run()
+        
     except KeyboardInterrupt:
         print("\n用户中断，退出程序")
         sys.exit(0)
     except Exception as e:
         print(f"\n启动失败: {e}")
         traceback.print_exc()
+        input("\n按回车键退出...")
         sys.exit(1)
 
 if __name__ == "__main__":
