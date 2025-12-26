@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员登录 - 币安事件合约群控交易系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .login-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 40px;
+            width: 100%;
+            max-width: 450px;
+        }
+        
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .login-header h1 {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .login-header p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .wallet-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .wallet-address {
+            font-family: monospace;
+            font-size: 14px;
+            color: #333;
+            word-break: break-all;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 15px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .success-message.show {
+            display: block;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.6s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>管理员登录</h1>
+            <p>请连接Web3钱包进行登录</p>
+        </div>
+        
+        <div id="error-message" class="error-message"></div>
+        <div id="success-message" class="success-message"></div>
+        
+        <div id="wallet-info" class="wallet-info" style="display: none;">
+            <div class="wallet-address" id="wallet-address"></div>
+        </div>
+        
+        <button id="connect-btn" class="btn btn-primary" onclick="connectWallet()">
+            连接钱包
+        </button>
+        
+        <button id="login-btn" class="btn btn-primary" onclick="login()" style="display: none;">
+            登录
+        </button>
+        
+        <div class="footer">
+            <p>币安事件合约群控交易系统</p>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = window.location.origin;
+        let walletAddress = null;
+        let authMessage = null;
+        let authTimestamp = null;
+        
+        // 检查是否已登录
+        function checkLogin() {
+            const token = localStorage.getItem('admin_token');
+            const address = localStorage.getItem('wallet_address');
+            if (token && address) {
+                // 验证token是否有效
+                verifyToken(token, address);
+            }
+        }
+        
+        // 验证token
+        async function verifyToken(token, address) {
+            try {
+                const response = await fetch(`${API_BASE}/api/web3/verify`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    // Token有效，跳转到管理页面
+                    window.location.href = '/admin';
+                } else {
+                    // Token无效，清除本地存储
+                    localStorage.removeItem('admin_token');
+                    localStorage.removeItem('wallet_address');
+                }
+            } catch (error) {
+                console.error('验证token失败:', error);
+            }
+        }
+        
+        // 连接钱包
+        async function connectWallet() {
+            if (typeof window.ethereum === 'undefined') {
+                showError('请安装 MetaMask 或其他 Web3 钱包');
+                return;
+            }
+            
+            try {
+                const btn = document.getElementById('connect-btn');
+                btn.disabled = true;
+                btn.innerHTML = '<span class="loading"></span>连接中...';
+                
+                // 请求账户访问
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                if (accounts.length === 0) {
+                    showError('请授权钱包访问');
+                    btn.disabled = false;
+                    btn.innerHTML = '连接钱包';
+                    return;
+                }
+                
+                walletAddress = accounts[0];
+                
+                // 显示钱包地址
+                document.getElementById('wallet-info').style.display = 'block';
+                document.getElementById('wallet-address').textContent = 
+                    walletAddress.substring(0, 6) + '...' + walletAddress.substring(38);
+                
+                // 获取认证消息
+                const messageResponse = await fetch(`${API_BASE}/api/web3/get-auth-message`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ address: walletAddress })
+                });
+                
+                const messageData = await messageResponse.json();
+                if (messageData.code !== 200) {
+                    showError('获取认证消息失败: ' + (messageData.message || '未知错误'));
+                    btn.disabled = false;
+                    btn.innerHTML = '连接钱包';
+                    return;
+                }
+                
+                authMessage = messageData.data.message;
+                authTimestamp = messageData.data.timestamp;
+                
+                // 显示登录按钮
+                document.getElementById('connect-btn').style.display = 'none';
+                document.getElementById('login-btn').style.display = 'block';
+                
+                hideError();
+            } catch (error) {
+                console.error('连接钱包失败:', error);
+                showError('连接钱包失败: ' + error.message);
+                document.getElementById('connect-btn').disabled = false;
+                document.getElementById('connect-btn').innerHTML = '连接钱包';
+            }
+        }
+        
+        // 登录
+        async function login() {
+            if (!walletAddress || !authMessage) {
+                showError('请先连接钱包');
+                return;
+            }
+            
+            try {
+                const btn = document.getElementById('login-btn');
+                btn.disabled = true;
+                btn.innerHTML = '<span class="loading"></span>登录中...';
+                
+                // 请求签名
+                const signature = await window.ethereum.request({
+                    method: 'personal_sign',
+                    params: [authMessage, walletAddress]
+                });
+                
+                // 登录
+                const loginResponse = await fetch(`${API_BASE}/api/web3/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        address: walletAddress,
+                        message: authMessage,
+                        signature: signature,
+                        timestamp: authTimestamp
+                    })
+                });
+                
+                const loginData = await loginResponse.json();
+                if (loginData.code === 200) {
+                    // 保存token和地址
+                    localStorage.setItem('admin_token', loginData.data.token);
+                    localStorage.setItem('wallet_address', walletAddress);
+                    
+                    showSuccess('登录成功，正在跳转...');
+                    
+                    // 跳转到管理页面
+                    setTimeout(() => {
+                        window.location.href = '/admin';
+                    }, 500);
+                } else {
+                    showError('登录失败: ' + (loginData.message || '未知错误'));
+                    btn.disabled = false;
+                    btn.innerHTML = '登录';
+                }
+            } catch (error) {
+                console.error('登录失败:', error);
+                showError('登录失败: ' + error.message);
+                document.getElementById('login-btn').disabled = false;
+                document.getElementById('login-btn').innerHTML = '登录';
+            }
+        }
+        
+        // 显示错误消息
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+            document.getElementById('success-message').classList.remove('show');
+        }
+        
+        // 隐藏错误消息
+        function hideError() {
+            document.getElementById('error-message').classList.remove('show');
+        }
+        
+        // 显示成功消息
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success-message');
+            successDiv.textContent = message;
+            successDiv.classList.add('show');
+            document.getElementById('error-message').classList.remove('show');
+        }
+        
+        // 监听钱包账户变化
+        if (typeof window.ethereum !== 'undefined') {
+            window.ethereum.on('accountsChanged', function(accounts) {
+                if (accounts.length === 0) {
+                    // 用户断开连接
+                    walletAddress = null;
+                    authMessage = null;
+                    authTimestamp = null;
+                    document.getElementById('wallet-info').style.display = 'none';
+                    document.getElementById('connect-btn').style.display = 'block';
+                    document.getElementById('login-btn').style.display = 'none';
+                    document.getElementById('connect-btn').disabled = false;
+                    document.getElementById('connect-btn').innerHTML = '连接钱包';
+                } else {
+                    // 账户切换，重新连接
+                    connectWallet();
+                }
+            });
+        }
+        
+        // 页面加载时检查登录状态
+        window.onload = function() {
+            checkLogin();
+        };
+    </script>
+</body>
+</html>
+

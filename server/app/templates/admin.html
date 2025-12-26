@@ -328,21 +328,59 @@
         let walletAddress = null;
         
         // 检查是否已登录
-        function checkLogin() {
+        async function checkLogin() {
             const token = localStorage.getItem('admin_token');
             const address = localStorage.getItem('wallet_address');
             if (token && address) {
-                adminToken = token;
-                walletAddress = address;
-                document.getElementById('wallet-address').textContent = address.substring(0, 6) + '...' + address.substring(38);
-                document.getElementById('connect-wallet-btn').classList.add('hidden');
-                document.getElementById('logout-btn').classList.remove('hidden');
-                document.getElementById('main-content').style.display = 'block';
-                loadOrders();
+                // 验证token是否有效
+                try {
+                    const response = await fetch(`${API_BASE}/api/web3/verify`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        // Token有效，显示主页面
+                        adminToken = token;
+                        walletAddress = address;
+                        const walletAddressEl = document.getElementById('wallet-address');
+                        const connectBtn = document.getElementById('connect-wallet-btn');
+                        const logoutBtn = document.getElementById('logout-btn');
+                        const mainContent = document.getElementById('main-content');
+                        const loginPage = document.getElementById('login-page');
+                        
+                        if (walletAddressEl) walletAddressEl.textContent = address.substring(0, 6) + '...' + address.substring(38);
+                        if (connectBtn) connectBtn.classList.add('hidden');
+                        if (logoutBtn) logoutBtn.classList.remove('hidden');
+                        if (mainContent) mainContent.style.display = 'block';
+                        if (loginPage) loginPage.style.display = 'none';
+                        
+                        // 加载数据
+                        loadOrders();
+                        loadUsers();
+                        loadFibLevels();
+                        // 每5秒刷新一次斐波拉契点位
+                        setInterval(loadFibLevels, 5000);
+                        return true;
+                    } else {
+                        // Token无效，清除并跳转到登录页面
+                        localStorage.removeItem('admin_token');
+                        localStorage.removeItem('wallet_address');
+                        window.location.href = '/login';
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('验证token失败:', error);
+                    localStorage.removeItem('admin_token');
+                    localStorage.removeItem('wallet_address');
+                    window.location.href = '/login';
+                    return false;
+                }
             } else {
-                // 如果没有Web3登录，允许使用admin-token直接访问（用于测试）
-                document.getElementById('main-content').style.display = 'block';
-                loadOrders();
+                // 没有token，跳转到登录页面
+                window.location.href = '/login';
+                return false;
             }
         }
         
@@ -426,10 +464,8 @@
             walletAddress = null;
             localStorage.removeItem('admin_token');
             localStorage.removeItem('wallet_address');
-            document.getElementById('wallet-address').textContent = '';
-            document.getElementById('connect-wallet-btn').classList.remove('hidden');
-            document.getElementById('logout-btn').classList.add('hidden');
-            document.getElementById('main-content').style.display = 'none';
+            // 跳转到登录页面
+            window.location.href = '/login';
         }
         
         // 获取请求头
@@ -437,13 +473,11 @@
             const headers = {
                 'Content-Type': 'application/json'
             };
-            if (adminToken) {
-                // Web3登录使用Authorization
-                headers['Authorization'] = `Bearer ${adminToken}`;
-            } else {
-                // 如果没有Web3 token，使用admin_token（用于测试）
-                headers['admin-token'] = 'admin-secret-token';
+            if (!adminToken) {
+                throw new Error('请先登录');
             }
+            // 必须使用Web3登录的Authorization token
+            headers['Authorization'] = `Bearer ${adminToken}`;
             return headers;
         }
         
@@ -523,7 +557,16 @@
                     headers: getHeaders()
                 });
                 
+                if (!response.ok) {
+                    console.error('API请求失败:', response.status, response.statusText);
+                    const errorText = await response.text();
+                    console.error('错误详情:', errorText);
+                    return;
+                }
+                
                 const result = await response.json();
+                console.log('API返回数据:', result);
+                
                 if (result.code === 200) {
                     const data = result.data;
                     
@@ -547,10 +590,45 @@
                         document.getElementById('down-details').textContent = '暂无数据';
                     }
                     
-                    // 显示当前价格和RSI
-                    document.getElementById('current-price').textContent = data.current_price ? `$${data.current_price.toFixed(2)}` : '--';
-                    document.getElementById('current-rsi').textContent = data.current_rsi ? data.current_rsi.toFixed(2) : '--';
-                    document.getElementById('cached-at').textContent = data.cached_at ? new Date(data.cached_at).toLocaleString('zh-CN') : '--';
+                    // 显示当前价格和RSI（即使没有点位也应该显示）
+                    const priceEl = document.getElementById('current-price');
+                    const rsiEl = document.getElementById('current-rsi');
+                    if (priceEl) {
+                        priceEl.textContent = (data.current_price !== null && data.current_price !== undefined) 
+                            ? `$${data.current_price.toFixed(2)}` 
+                            : '--';
+                    }
+                    if (rsiEl) {
+                        rsiEl.textContent = (data.current_rsi !== null && data.current_rsi !== undefined) 
+                            ? data.current_rsi.toFixed(2) 
+                            : '--';
+                    }
+                    
+                    // 显示错误信息（如果有）
+                    const errorDiv = document.getElementById('price-error');
+                    if (data.error) {
+                        if (!errorDiv) {
+                            const fibDisplay = document.getElementById('fib-levels-display');
+                            if (fibDisplay) {
+                                const errorHtml = `<div id="price-error" style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 10px; margin-top: 10px; color: #856404;">
+                                    <strong>⚠️ 警告：</strong>${data.error.includes('451') || data.error.includes('restricted') ? '币安API地区限制，请配置代理' : data.error}
+                                </div>`;
+                                fibDisplay.insertAdjacentHTML('beforeend', errorHtml);
+                            }
+                        } else {
+                            errorDiv.innerHTML = `<strong>⚠️ 警告：</strong>${data.error.includes('451') || data.error.includes('restricted') ? '币安API地区限制，请配置代理' : data.error}`;
+                            errorDiv.style.display = 'block';
+                        }
+                    } else if (errorDiv) {
+                        errorDiv.style.display = 'none';
+                    }
+                    
+                    const cachedAtEl = document.getElementById('cached-at');
+                    if (cachedAtEl) {
+                        cachedAtEl.textContent = data.cached_at ? new Date(data.cached_at).toLocaleString('zh-CN') : '--';
+                    }
+                } else {
+                    console.error('API返回错误:', result.message || '未知错误');
                 }
             } catch (error) {
                 console.error('加载斐波拉契点位失败:', error);
@@ -829,18 +907,14 @@
         }
         
         // 页面加载时检查登录状态
-        window.onload = function() {
-            checkLogin();
-            // 如果没有Web3登录，显示提示但允许使用admin-token
-            if (!adminToken) {
-                console.log('未连接Web3钱包，使用admin-token访问（仅用于测试）');
+        window.onload = async function() {
+            // 等待登录检查完成
+            const isLoggedIn = await checkLogin();
+            if (!isLoggedIn) {
+                // 未登录，不显示提示，因为checkLogin已经处理了UI显示
+                return;
             }
-            // 加载订单和斐波拉契点位
-            loadOrders();
-            loadUsers();
-            loadFibLevels();
-            // 每5秒刷新一次斐波拉契点位
-            setInterval(loadFibLevels, 5000);
+            // 已登录，数据加载已在checkLogin中完成
         };
         
         // 监听钱包账户变化

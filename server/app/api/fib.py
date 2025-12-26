@@ -92,12 +92,18 @@ def get_current_fib_levels(
     current_price = price_monitor.get_ethusdt_price()
     current_rsi = price_monitor.calculate_rsi()
     
+    # 获取错误信息（如果有）
+    error_info = None
+    if hasattr(price_monitor, 'last_error') and price_monitor.last_error:
+        error_info = price_monitor.last_error
+    
     data = {
         'up_data': cached_levels.get('up') if cached_levels else None,
         'down_data': cached_levels.get('down') if cached_levels else None,
         'cached_at': cached_levels.get('cached_at') if cached_levels else None,
         'current_price': current_price,
-        'current_rsi': current_rsi
+        'current_rsi': current_rsi,
+        'error': error_info  # 添加错误信息
     }
     
     return CurrentFibLevelsResponse(data=data)

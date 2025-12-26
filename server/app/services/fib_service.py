@@ -16,13 +16,22 @@ class FibService:
     
     def __init__(self):
         # 初始化币安合约交易所
-        self.exchange = ccxt.binance({
+        exchange_config = {
             'rateLimit': 1200,
             'enableRateLimit': True,
             'options': {
                 'defaultType': 'future',  # 合约模式
             }
-        })
+        }
+        # 如果设置了代理，使用代理
+        import os
+        proxy = os.getenv('BINANCE_PROXY')
+        if proxy:
+            exchange_config['proxies'] = {
+                'http': proxy,
+                'https': proxy
+            }
+        self.exchange = ccxt.binance(exchange_config)
         self.symbol = 'ETH/USDT:USDT'  # 币安USDT合约
         self.redis_client = get_redis()
     
@@ -271,4 +280,6 @@ class FibService:
         except Exception as e:
             print(f"清空斐波拉契缓存失败: {e}")
             return False
+
+
 

@@ -19,28 +19,38 @@ class PriceMonitor:
     
     def __init__(self):
         # 初始化币安合约交易所
-        self.exchange = ccxt.binance({
+        exchange_config = {
             'rateLimit': 1200,
             'enableRateLimit': True,
             'options': {
                 'defaultType': 'future',  # 合约模式
             }
-        })
+        }
+        # 如果设置了代理，使用代理
+        import os
+        proxy = os.getenv('BINANCE_PROXY')
+        if proxy:
+            exchange_config['proxies'] = {
+                'http': proxy,
+                'https': proxy
+            }
+        self.exchange = ccxt.binance(exchange_config)
         self.symbol = 'ETH/USDT:USDT'  # 币安USDT合约
         self.fib_service = FibService()
         self.is_running = False
         self.monitor_thread = None
         self.price_tolerance = 0.01  # 价格容差（避免频繁触发）
         self.lock = threading.Lock()  # 防止重复生成订单
+        self.last_error = None  # 记录最后一次错误
     
     def calculate_rsi(self, period: int = 14, include_latest: bool = True) -> Optional[float]:
         """
-        计算RSI指数
+        计算RSI指数（使用Wilder's平滑方法）
         include_latest: 是否包含最新完成的K线
         """
         try:
-            # 获取足够的K线数据用于RSI计算
-            ohlcv = self.exchange.fetch_ohlcv(self.symbol, '1m', limit=period + 10)
+            # 获取足够的K线数据用于RSI计算（需要更多数据用于Wilder's平滑）
+            ohlcv = self.exchange.fetch_ohlcv(self.symbol, '1m', limit=period + 20)
             
             if not ohlcv or len(ohlcv) < period + 1:
                 return None
@@ -51,31 +61,61 @@ class PriceMonitor:
             if not include_latest:
                 df = df.iloc[:-1]
             
+            if len(df) < period + 1:
+                return None
+            
             # 计算价格变化
             delta = df['close'].diff()
             
             # 分离涨跌
-            gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+            gain = delta.where(delta > 0, 0.0).values
+            loss = (-delta.where(delta < 0, 0.0)).values
+            
+            # 使用Wilder's平滑方法计算RSI
+            # 第一步：计算前period期的简单平均作为初始值
+            avg_gain = np.zeros(len(gain))
+            avg_loss = np.zeros(len(loss))
+            
+            # 初始值：前period期的简单平均（跳过第一个NaN）
+            avg_gain[period] = np.mean(gain[1:period+1])
+            avg_loss[period] = np.mean(loss[1:period+1])
+            
+            # 第二步：使用Wilder's平滑递归计算后续值
+            # Wilder's公式: new_avg = (old_avg * (period-1) + current_value) / period
+            for i in range(period + 1, len(gain)):
+                avg_gain[i] = (avg_gain[i-1] * (period - 1) + gain[i]) / period
+                avg_loss[i] = (avg_loss[i-1] * (period - 1) + loss[i]) / period
             
             # 计算RS和RSI
-            rs = gain / loss
+            rs = avg_gain / avg_loss
             rsi = 100 - (100 / (1 + rs))
             
             # 返回最新的RSI值
-            return float(rsi.iloc[-1])
+            return float(rsi[-1])
             
         except Exception as e:
-            print(f"计算RSI失败: {e}")
+            error_msg = str(e)
+            self.last_error = error_msg
+            print(f"[ERROR] 计算RSI失败: {error_msg}")
+            # 如果是地区限制错误，给出提示
+            if '451' in error_msg or 'restricted location' in error_msg.lower():
+                print(f"[WARN] 币安API地区限制，请配置代理或使用其他数据源")
             return None
     
     def get_ethusdt_price(self) -> Optional[float]:
         """获取ETHUSDT合约价格"""
         try:
             ticker = self.exchange.fetch_ticker(self.symbol)
+            self.last_error = None
             return float(ticker['last'])
         except Exception as e:
-            print(f"获取ETHUSDT价格失败: {e}")
+            error_msg = str(e)
+            self.last_error = error_msg
+            # 使用print输出到pm2日志
+            print(f"[ERROR] 获取ETHUSDT价格失败: {error_msg}")
+            # 如果是地区限制错误，给出提示
+            if '451' in error_msg or 'restricted location' in error_msg.lower():
+                print(f"[WARN] 币安API地区限制，请配置代理或使用其他数据源")
             return None
     
     def get_last_completed_candle(self) -> Optional[dict]:

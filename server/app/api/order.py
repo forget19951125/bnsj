@@ -8,7 +8,8 @@ from typing import Optional
 from ..database import get_db
 from ..services.order_service import OrderService
 from ..services.user_service import UserService
-from ..utils.decorators import get_current_user_id, verify_admin_token
+from ..utils.decorators import get_current_user_id
+from ..api.admin import get_admin_auth
 
 router = APIRouter(prefix="/api/orders", tags=["订单"])
 
@@ -54,15 +55,10 @@ class RecordResultResponse(BaseModel):
 @router.post("/create", response_model=CreateOrderResponse)
 def create_order(
     request: CreateOrderRequest,
-    admin_token: Optional[str] = Header(None),
-    authorization: Optional[str] = Header(None),
+    admin_auth: str = Depends(get_admin_auth),
     db: Session = Depends(get_db)
 ):
     """创建订单（管理员）"""
-    # 验证管理员权限
-    from ..api.admin import get_admin_auth
-    get_admin_auth(admin_token, authorization, db)
-    
     # 只允许ETHUSDT
     if request.symbol_name.upper() != "ETHUSDT":
         raise HTTPException(status_code=400, detail="只支持ETHUSDT交易对")

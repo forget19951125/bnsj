@@ -43,11 +43,9 @@ templates = Jinja2Templates(directory="app/templates")
 
 @app.get("/")
 def root():
-    """根路径"""
-    return {
-        "message": "币安事件合约群控交易系统 - 服务端API",
-        "version": "1.0.0"
-    }
+    """根路径 - 重定向到登录页面"""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/login")
 
 
 @app.get("/health")
@@ -60,6 +58,12 @@ def health():
         "status": "ok",
         "redis": "ok" if redis_ok else "error"
     }
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    """登录页面"""
+    return templates.TemplateResponse("login.html", {"request": request})
 
 
 @app.get("/admin", response_class=HTMLResponse)

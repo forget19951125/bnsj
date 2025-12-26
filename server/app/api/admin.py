@@ -13,24 +13,16 @@ router = APIRouter(prefix="/api/admin", tags=["管理员"])
 
 
 def get_admin_auth(
-    admin_token: Optional[str] = Header(None, alias="admin-token"),
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
-    """获取管理员认证（支持两种方式：admin_token或Web3签名）"""
-    # 优先使用Web3签名
-    if authorization and authorization.startswith("Bearer "):
-        try:
-            return verify_web3_admin(authorization, db)
-        except:
-            pass
+    """获取管理员认证（必须通过Web3登录验证）"""
+    # 必须提供Authorization header
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="请先登录")
     
-    # 回退到admin_token
-    if admin_token:
-        verify_admin_token(admin_token)
-        return "admin_token"
-    
-    raise HTTPException(status_code=403, detail="管理员权限不足")
+    # 验证Web3管理员Token（必须登录）
+    return verify_web3_admin(authorization, db)
 
 
 class OrderListResponse(BaseModel):
