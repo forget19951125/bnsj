@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """客户端配置"""
     
     # 服务器地址
-    server_url: str = os.getenv("SERVER_URL", "http://localhost:8000")
+    server_url: str = os.getenv("SERVER_URL", "http://104.194.155.10:8000")
     
     # 默认下单金额
     default_order_amount: float = float(os.getenv("DEFAULT_ORDER_AMOUNT", "5.0"))
