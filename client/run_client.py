@@ -12,40 +12,53 @@ os.environ['PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD'] = '1'
 os.environ['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = '1'
 
 # 在导入PyQt5之前设置Qt插件路径（Windows平台）
+# runtime_hook.py 应该已经设置了，但这里作为备用
 if sys.platform == 'win32' and not os.environ.get('QT_PLUGIN_PATH'):
     try:
-        # 方法1: 优先通过导入PyQt5来查找（最可靠的方法）
-        try:
-            import PyQt5
-            from PyQt5 import QtCore
-            qt_core_path = QtCore.__file__
-            qt_dir = os.path.dirname(qt_core_path)
-            
-            # 检查多个可能的插件路径
-            possible_plugin_paths = [
-                os.path.join(qt_dir, 'Qt5', 'plugins'),
-                os.path.join(qt_dir, 'plugins'),
-                os.path.join(qt_dir, '..', 'Qt5', 'plugins'),
-            ]
-            
-            plugin_path = None
-            for path in possible_plugin_paths:
-                abs_path = os.path.abspath(path)
-                platforms_path = os.path.join(abs_path, 'platforms')
+        # 方法0: 如果是打包后的环境，优先检查 _MEIPASS 目录
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            meipass_plugin_path = os.path.join(sys._MEIPASS, 'PyQt5', 'Qt5', 'plugins')
+            if os.path.exists(meipass_plugin_path):
+                platforms_path = os.path.join(meipass_plugin_path, 'platforms')
                 qwindows_dll = os.path.join(platforms_path, 'qwindows.dll')
                 if os.path.exists(qwindows_dll):
-                    plugin_path = abs_path
-                    break
-            
-            if plugin_path:
-                os.environ['QT_PLUGIN_PATH'] = plugin_path
-                os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = plugin_path
-                print(f"已设置Qt插件路径: {plugin_path}")
-        except ImportError:
-            # PyQt5未安装，使用备用方法
-            pass
-        except Exception as e:
-            print(f"通过PyQt5查找路径失败: {e}")
+                    os.environ['QT_PLUGIN_PATH'] = meipass_plugin_path
+                    os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = meipass_plugin_path
+                    print(f"已设置Qt插件路径（打包环境）: {meipass_plugin_path}")
+        
+        # 方法1: 优先通过导入PyQt5来查找（最可靠的方法）
+        if not os.environ.get('QT_PLUGIN_PATH'):
+            try:
+                import PyQt5
+                from PyQt5 import QtCore
+                qt_core_path = QtCore.__file__
+                qt_dir = os.path.dirname(qt_core_path)
+                
+                # 检查多个可能的插件路径
+                possible_plugin_paths = [
+                    os.path.join(qt_dir, 'Qt5', 'plugins'),
+                    os.path.join(qt_dir, 'plugins'),
+                    os.path.join(qt_dir, '..', 'Qt5', 'plugins'),
+                ]
+                
+                plugin_path = None
+                for path in possible_plugin_paths:
+                    abs_path = os.path.abspath(path)
+                    platforms_path = os.path.join(abs_path, 'platforms')
+                    qwindows_dll = os.path.join(platforms_path, 'qwindows.dll')
+                    if os.path.exists(qwindows_dll):
+                        plugin_path = abs_path
+                        break
+                
+                if plugin_path:
+                    os.environ['QT_PLUGIN_PATH'] = plugin_path
+                    os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = plugin_path
+                    print(f"已设置Qt插件路径: {plugin_path}")
+            except ImportError:
+                # PyQt5未安装，使用备用方法
+                pass
+            except Exception as e:
+                print(f"通过PyQt5查找路径失败: {e}")
         
         # 方法2: 如果方法1失败，尝试查找site-packages目录（备用方法）
         if not os.environ.get('QT_PLUGIN_PATH'):

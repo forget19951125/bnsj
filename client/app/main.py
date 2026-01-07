@@ -163,6 +163,31 @@ class ClientApp:
         """设置Qt插件路径，解决Windows和macOS平台插件初始化失败问题"""
         if sys.platform in ('win32', 'darwin'):
             try:
+                # 方法0: 如果是打包后的环境，优先检查 _MEIPASS 目录
+                if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+                    meipass_plugin_path = os.path.join(sys._MEIPASS, 'PyQt5', 'Qt5', 'plugins')
+                    if os.path.exists(meipass_plugin_path):
+                        platforms_path = os.path.join(meipass_plugin_path, 'platforms')
+                        if sys.platform == 'win32':
+                            platform_plugin = os.path.join(platforms_path, 'qwindows.dll')
+                        elif sys.platform == 'darwin':
+                            platform_plugin = os.path.join(platforms_path, 'qcocoa.dylib')
+                        else:
+                            platform_plugin = None
+                        
+                        if platform_plugin and os.path.exists(platform_plugin):
+                            os.environ['QT_PLUGIN_PATH'] = meipass_plugin_path
+                            os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = meipass_plugin_path
+                            # 使用QCoreApplication.setLibraryPaths设置插件路径
+                            try:
+                                from PyQt5.QtCore import QCoreApplication
+                                if not QCoreApplication.instance():
+                                    QCoreApplication.setLibraryPaths([meipass_plugin_path])
+                                    print(f"[_setup_qt_plugin_paths] 已设置Qt插件路径（打包环境）: {meipass_plugin_path}")
+                                    return
+                            except:
+                                pass
+                
                 # 如果环境变量已设置，直接使用
                 plugin_path = os.environ.get('QT_PLUGIN_PATH') or os.environ.get('QT_QPA_PLATFORM_PLUGIN_PATH')
                 if plugin_path and os.path.exists(plugin_path):
@@ -177,6 +202,13 @@ class ClientApp:
                     
                     if platform_plugin and os.path.exists(platform_plugin):
                         print(f"[_setup_qt_plugin_paths] 使用环境变量中的插件路径: {plugin_path}")
+                        # 使用QCoreApplication.setLibraryPaths设置插件路径
+                        try:
+                            from PyQt5.QtCore import QCoreApplication
+                            if not QCoreApplication.instance():
+                                QCoreApplication.setLibraryPaths([plugin_path])
+                        except:
+                            pass
                         return
                 
                 # 方法1: 优先通过导入PyQt5来查找（最可靠的方法）
@@ -482,11 +514,18 @@ class ClientApp:
                 self.order_service = OrderService(self.api_client, binance_service)
                 self.order_service.set_order_callback(self._on_order_callback)
                 
-                # 设置订单服务的日志回调
+                # 设置订单服务的日志回调（使用信号确保线程安全）
                 def order_log_callback(msg):
                     if self.main_window:
-                        from PyQt5.QtCore import QTimer
-                        QTimer.singleShot(0, lambda: self.main_window.log(msg))
+                        try:
+                            # 使用信号发送日志消息，确保线程安全
+                            from PyQt5.QtCore import QTimer, pyqtSignal, QObject
+                            # 直接在主线程中调用log方法
+                            QTimer.singleShot(0, lambda m=msg: self.main_window.log(m))
+                        except Exception as e:
+                            # 如果信号发送失败，直接输出到控制台
+                            print(f"[日志回调失败] {e}")
+                            print(f"[OrderService] {msg}")
                 self.order_service.set_log_callback(order_log_callback)
                 
                 # 设置订单金额

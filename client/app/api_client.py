@@ -129,8 +129,16 @@ class APIClient:
                     return None
                 # 服务器返回的data就是订单对象本身，不是嵌套在order字段中
                 if isinstance(data_obj, dict):
-                    # 如果data_obj有order字段，使用order字段；否则直接使用data_obj
-                    return data_obj.get("order") if "order" in data_obj else data_obj
+                    # 如果data_obj有order字段且值不为None，使用order字段；否则直接使用data_obj
+                    if "order" in data_obj and data_obj.get("order") is not None:
+                        result = data_obj.get("order")
+                    else:
+                        result = data_obj
+                    
+                    # 如果result是空字典，返回None
+                    if isinstance(result, dict) and len(result) == 0:
+                        return None
+                    return result
                 return None
             return None
         except requests.exceptions.HTTPError as e:

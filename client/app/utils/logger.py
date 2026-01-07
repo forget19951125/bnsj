@@ -7,7 +7,9 @@ from datetime import datetime
 from pathlib import Path
 
 # 日志文件路径
-LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+# 处理打包后的路径问题
+from .path_helper import get_logs_dir
+LOG_DIR = Path(get_logs_dir())
 LOG_FILE = LOG_DIR / "client.log"
 
 # 确保日志目录存在
@@ -95,4 +97,5 @@ def exception(message):
 def get_log_file():
     """获取日志文件路径"""
     return str(LOG_FILE)
+
 

@@ -85,8 +85,8 @@ class LoginWindow(QWidget):
         login_button.clicked.connect(self._handle_login)
         layout.addWidget(login_button)
         
-        # 绑定回车键
-        self.password_entry.returnPressed.connect(self._handle_login)
+        # 不绑定回车键，避免在输入框内按回车时触发登录
+        # 用户必须点击登录按钮才能登录
         
         self.setLayout(layout)
     

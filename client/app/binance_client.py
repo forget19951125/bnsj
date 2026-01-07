@@ -53,14 +53,16 @@ else:  # Windows和其他平台
 
 
 def find_browser_executable():
-    """查找浏览器可执行文件"""
+    """查找浏览器可执行文件
+    只查找运行目录（exe同级目录）下的google_web目录，不去其他目录找
+    """
     import os
-    possible_paths = []
+    from .utils.path_helper import get_client_dir
     
-    # 0. 优先检查 google_web 目录（用户指定的目录）
-    current_file = os.path.abspath(__file__)
-    app_dir = os.path.dirname(current_file)
-    client_dir = os.path.dirname(app_dir)
+    # 只检查运行目录（exe同级目录）下的google_web目录
+    client_dir = get_client_dir()
+    
+    # 检查 google_web 目录
     google_web_paths = []
     if sys.platform == 'win32':
         # chrome.exe 直接在 google_web 目录下
@@ -79,40 +81,14 @@ def find_browser_executable():
             os.path.join(client_dir, 'google_web', 'chrome'),
             os.path.join(client_dir, 'google_web', 'chrome-linux', 'chrome'),
         ]
+    
+    # 只返回运行目录下的浏览器路径
     for path in google_web_paths:
         if os.path.exists(path):
-            possible_paths.append(path)
+            return path
     
-    # 1. 检查常见的Playwright安装位置
-    local_appdata = os.environ.get('LOCALAPPDATA', '')
-    if local_appdata:
-        # 尝试不同的revision版本
-        for revision in ['1200', '1199', '1201', '1198', '1202']:
-            for platform_suffix in ['chrome-win64', 'chrome-win32', 'chrome-win']:
-                possible_path = os.path.join(local_appdata, 'ms-playwright', f'chromium-{revision}', platform_suffix, 'chrome.exe')
-                if os.path.exists(possible_path):
-                    possible_paths.append(possible_path)
-    
-    # 2. 检查用户目录下的Playwright目录
-    user_home = os.path.expanduser('~')
-    if user_home:
-        for revision in ['1200', '1199', '1201', '1198', '1202']:
-            for platform_suffix in ['chrome-win64', 'chrome-win32', 'chrome-win']:
-                possible_path = os.path.join(user_home, 'AppData', 'Local', 'ms-playwright', f'chromium-{revision}', platform_suffix, 'chrome.exe')
-                if os.path.exists(possible_path):
-                    possible_paths.append(possible_path)
-    
-    # 3. 检查项目目录下是否有浏览器
-    project_browser_paths = [
-        os.path.join(client_dir, 'chromium', 'chrome.exe'),
-        os.path.join(client_dir, 'browser', 'chrome.exe'),
-        os.path.join(client_dir, 'playwright-browser', 'chrome.exe'),
-    ]
-    for path in project_browser_paths:
-        if os.path.exists(path):
-            possible_paths.append(path)
-    
-    return possible_paths[0] if possible_paths else None
+    # 如果运行目录下没有找到，返回None
+    return None
 
 
 def launch_persistent_ctx(pw, reset=False, headless=True, user_id=None, log_callback=None):
@@ -125,10 +101,8 @@ def launch_persistent_ctx(pw, reset=False, headless=True, user_id=None, log_call
         user_id: 用户ID，用于多账号支持（不同账号使用不同目录）
     """
     # 获取程序运行目录（client目录）
-    current_file = os.path.abspath(__file__)
-    # app/binance_client.py -> app -> client
-    app_dir = os.path.dirname(current_file)
-    client_dir = os.path.dirname(app_dir)
+    from .utils.path_helper import get_client_dir
+    client_dir = get_client_dir()
     
     # 根据user_id创建不同的目录，支持多开
     if user_id:
@@ -152,38 +126,36 @@ def launch_persistent_ctx(pw, reset=False, headless=True, user_id=None, log_call
     if headless:
         args += ["--headless=new", "--disable-gpu"]
 
-    # 优先查找 google_web 目录中的浏览器（用户指定的目录）
+    # 只查找运行目录（exe同级目录）下的google_web目录中的浏览器
     browser_executable = None
     found_path = find_browser_executable()
+    
+    # 添加详细的调试信息
+    client_dir = get_client_dir()
+    exe_dir_google_web = os.path.join(client_dir, 'google_web')
+    if log_callback:
+        log_callback(f"[DEBUG] 检查运行目录的浏览器路径: {exe_dir_google_web}")
+        log_callback(f"[DEBUG] 路径存在: {os.path.exists(exe_dir_google_web)}")
+        if os.path.exists(exe_dir_google_web):
+            chrome_path = os.path.join(exe_dir_google_web, 'chrome.exe')
+            log_callback(f"[DEBUG] chrome.exe路径: {chrome_path}")
+            log_callback(f"[DEBUG] chrome.exe存在: {os.path.exists(chrome_path)}")
+    
     if found_path and os.path.exists(found_path):
         browser_executable = found_path
         if log_callback:
-            log_callback(f"[DEBUG] 优先使用google_web目录中的浏览器: {browser_executable}")
-        safe_print(f"[DEBUG] 优先使用google_web目录中的浏览器: {browser_executable}")
+            log_callback(f"[DEBUG] [OK] 找到浏览器: {browser_executable}")
+        safe_print(f"[DEBUG] [OK] 找到浏览器: {browser_executable}")
     else:
-        # 如果google_web目录中没有浏览器，尝试使用Playwright报告的路径
-        try:
-            browser_executable = pw.chromium.executable_path
-            if os.path.exists(browser_executable):
-                if log_callback:
-                    log_callback(f"[DEBUG] 使用Playwright报告的浏览器路径: {browser_executable}")
-                safe_print(f"[DEBUG] 使用Playwright报告的浏览器路径: {browser_executable}")
-            else:
-                # Playwright报告的路径不存在，尝试查找其他位置
-                found_path = find_browser_executable()
-                if found_path and os.path.exists(found_path):
-                    browser_executable = found_path
-                    if log_callback:
-                        log_callback(f"[DEBUG] 使用找到的浏览器路径: {browser_executable}")
-                    safe_print(f"[DEBUG] 使用找到的浏览器路径: {browser_executable}")
-        except:
-            # 如果获取executable_path失败，尝试查找
-            found_path = find_browser_executable()
-            if found_path and os.path.exists(found_path):
-                browser_executable = found_path
-                if log_callback:
-                    log_callback(f"[DEBUG] 使用找到的浏览器路径: {browser_executable}")
-                safe_print(f"[DEBUG] 使用找到的浏览器路径: {browser_executable}")
+        # 如果运行目录下没有找到浏览器，报错
+        error_msg = f"[ERROR] 未找到运行目录下的google_web浏览器，请确保google_web目录已解压到exe同级目录"
+        if log_callback:
+            log_callback(error_msg)
+            log_callback(f"[ERROR] 期望的浏览器路径: {os.path.join(exe_dir_google_web, 'chrome.exe')}")
+        safe_print(error_msg)
+        safe_print(f"[ERROR] 期望的浏览器路径: {os.path.join(exe_dir_google_web, 'chrome.exe')}")
+        # 不再尝试其他路径，直接返回None，让调用者处理错误
+        browser_executable = None
 
     common_kwargs = dict(
         user_data_dir=user_data_dir,
@@ -199,27 +171,28 @@ def launch_persistent_ctx(pw, reset=False, headless=True, user_id=None, log_call
         },
     )
     
-    # 如果找到了浏览器可执行文件，则使用executable_path参数
-    if browser_executable and os.path.exists(browser_executable):
-        try:
-            pw_executable = pw.chromium.executable_path
-            # 如果找到的路径与Playwright报告的路径不同，或者Playwright报告的路径不存在，使用找到的路径
-            if browser_executable != pw_executable or not os.path.exists(pw_executable):
-                common_kwargs['executable_path'] = browser_executable
-                if log_callback:
-                    log_callback(f"[DEBUG] 使用自定义浏览器路径: {browser_executable}")
-                safe_print(f"[DEBUG] 使用自定义浏览器路径: {browser_executable}")
-        except:
-            # 如果无法获取Playwright的executable_path，直接使用找到的路径
-            common_kwargs['executable_path'] = browser_executable
-            if log_callback:
-                log_callback(f"[DEBUG] 使用自定义浏览器路径: {browser_executable}")
-            safe_print(f"[DEBUG] 使用自定义浏览器路径: {browser_executable}")
-    elif browser_executable:
-        # 如果浏览器路径存在但文件不存在，记录警告
+    # 必须使用运行目录下的浏览器，如果找不到则抛出异常
+    if not browser_executable or not os.path.exists(browser_executable):
+        error_msg = f"无法找到运行目录下的浏览器。请确保google_web目录已解压到exe同级目录: {exe_dir_google_web}"
         if log_callback:
-            log_callback(f"[WARN] 浏览器路径不存在: {browser_executable}")
-        safe_print(f"[WARN] 浏览器路径不存在: {browser_executable}")
+            log_callback(f"[ERROR] {error_msg}")
+        safe_print(f"[ERROR] {error_msg}")
+        raise FileNotFoundError(error_msg)
+    
+    # 使用找到的浏览器路径
+    try:
+        pw_executable = pw.chromium.executable_path
+        # 使用运行目录下的浏览器路径
+        common_kwargs['executable_path'] = browser_executable
+        if log_callback:
+            log_callback(f"[DEBUG] 使用运行目录下的浏览器: {browser_executable}")
+        safe_print(f"[DEBUG] 使用运行目录下的浏览器: {browser_executable}")
+    except:
+        # 如果无法获取Playwright的executable_path，直接使用找到的路径
+        common_kwargs['executable_path'] = browser_executable
+        if log_callback:
+            log_callback(f"[DEBUG] 使用运行目录下的浏览器: {browser_executable}")
+        safe_print(f"[DEBUG] 使用运行目录下的浏览器: {browser_executable}")
 
     if log_callback:
         log_callback(f"[DEBUG] launch_persistent_ctx - 准备启动浏览器, user_data_dir={user_data_dir}, headless={headless}")
@@ -412,9 +385,8 @@ def get_token(reset=False, headless=True, qr_callback=None, user_id=None, log_ca
                                     possible_paths.append(possible_path)
                     
                     # 3. 检查项目目录下是否有浏览器（优先检查google_web目录）
-                    current_file = os.path.abspath(__file__)
-                    app_dir = os.path.dirname(current_file)
-                    client_dir = os.path.dirname(app_dir)
+                    from .utils.path_helper import get_client_dir
+                    client_dir = get_client_dir()
                     project_browser_paths = [
                         os.path.join(client_dir, 'google_web', 'chrome.exe'),  # 优先检查google_web目录
                         os.path.join(client_dir, 'chromium', 'chrome.exe'),
