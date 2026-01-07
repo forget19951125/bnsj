@@ -362,8 +362,9 @@ class PriceMonitor:
                     rsi_value >= 75 and 
                     self.check_short_price_condition(current_price)):
                     print(f"触发空单条件: 价格={current_price:.2f}, 上升点位={up_level:.2f}, RSI={rsi_value:.2f}")
-                    # 创建10分钟和30分钟空单
-                    self._create_orders(db, 'SHORT', current_price, rsi_value)
+                    # [已屏蔽] 创建10分钟和30分钟空单
+                    # self._create_orders(db, 'SHORT', current_price, rsi_value)
+                    print(f"[已屏蔽] 空单创建功能已禁用，仅记录条件满足")
                     # 清空缓存
                     self.fib_service.clear_fib_cache()
                     return True
@@ -376,8 +377,9 @@ class PriceMonitor:
                     rsi_value <= 25 and 
                     self.check_long_price_condition(current_price)):
                     print(f"触发多单条件: 价格={current_price:.2f}, 下降点位={down_level:.2f}, RSI={rsi_value:.2f}")
-                    # 创建10分钟和30分钟多单
-                    self._create_orders(db, 'LONG', current_price, rsi_value)
+                    # [已屏蔽] 创建10分钟和30分钟多单
+                    # self._create_orders(db, 'LONG', current_price, rsi_value)
+                    print(f"[已屏蔽] 多单创建功能已禁用，仅记录条件满足")
                     # 清空缓存
                     self.fib_service.clear_fib_cache()
                     return True
