@@ -50,8 +50,8 @@ class OrderService:
         """拉取订单（带去重逻辑）"""
         redis_client = get_redis()
         
-        # 1. 查询待分配的订单
-        pending_orders = db.query(Order).filter(Order.status == 1).order_by(Order.created_at).all()
+        # 1. 查询待分配或已分配的订单（允许已分配的订单继续被其他用户拉取）
+        pending_orders = db.query(Order).filter(Order.status.in_([1, 2])).order_by(Order.created_at).all()
         
         if not pending_orders:
             return None
