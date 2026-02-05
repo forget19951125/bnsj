@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from .api import auth, order, user, admin, web3_auth, fib
+from .api import auth, order, user, admin, web3_auth, fib, webhook
 from .database import engine, Base
 from .config import settings
 
@@ -19,6 +19,25 @@ app = FastAPI(
     description="后台管理系统API",
     version="1.0.0"
 )
+
+
+@app.on_event("startup")
+async def startup_send_telegram_hello():
+    """启动时向 TG 群发送 hello（需配置 TG_BOT_TOKEN、TG_CHAT_ID）"""
+    import sys
+    has_token = bool((settings.tg_bot_token or "").strip())
+    has_chat = bool((settings.tg_chat_id or "").strip())
+    sys.stderr.write(f"[TG] 启动: token={'已配置' if has_token else '未配置'}, chat_id={'已配置' if has_chat else '未配置'}\n")
+    sys.stderr.flush()
+    if not has_token or not has_chat:
+        return
+    from .services.telegram_service import send_message_async
+    ok = await send_message_async("hello")
+    if ok:
+        sys.stderr.write("[TG] 启动消息已发送到群\n")
+    else:
+        sys.stderr.write("[TG] 启动消息发送失败，请查看上方 [TG] 错误信息\n")
+    sys.stderr.flush()
 
 # 配置CORS
 app.add_middleware(
@@ -36,6 +55,7 @@ app.include_router(user.router)
 app.include_router(admin.router)
 app.include_router(web3_auth.router)
 app.include_router(fib.router)
+app.include_router(webhook.router)
 
 # 静态文件和模板
 templates = Jinja2Templates(directory="app/templates")

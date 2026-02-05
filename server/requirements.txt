@@ -5,6 +5,7 @@ pymysql==1.1.0
 cryptography==41.0.7
 redis==5.0.1
 pydantic==2.5.0
+pydantic-settings==2.5.0
 python-jose[cryptography]==3.3.0
 PyJWT==2.8.0
 bcrypt==4.1.1
@@ -14,4 +15,5 @@ jinja2==3.1.2
 ccxt
 pandas
 numpy
+httpx
 

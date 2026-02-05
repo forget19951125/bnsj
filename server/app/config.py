@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     port: int = int(os.getenv("PORT", "8000"))
     debug: bool = os.getenv("DEBUG", "False").lower() == "true"
     
+    # Telegram 推送（可选，不配置则不发；PM2 需用 ecosystem.config.js 的 env 并 pm2 start 而非仅 restart 才注入）
+    tg_bot_token: Optional[str] = os.getenv("TG_BOT_TOKEN", "")
+    tg_chat_id: Optional[str] = os.getenv("TG_CHAT_ID", "")
+    # TradingView 信号额外推送的群（多个群时用逗号分隔，如 "-5134594313,-123456"）
+    tg_chat_id_webhook: Optional[str] = os.getenv("TG_CHAT_ID_WEBHOOK", "")
+    
     class Config:
         env_file = ".env"
         case_sensitive = False

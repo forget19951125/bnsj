@@ -5,9 +5,9 @@
 
 set -e
 
-SERVER_IP="45.61.148.208"
+SERVER_IP="104.194.155.10"
 SERVER_USER="root"
-SERVER_PASSWORD="5Dw97H1zmtZNwX"
+SERVER_PASSWORD="mz3B6w5qsnfeB7"
 PROJECT_DIR="/opt/bnsj"
 REPO_URL="git@github.com:forget19951125/bnsj.git"
 
@@ -79,8 +79,8 @@ if [ -f /tmp/bnsj.tar.gz ]; then
 fi
 
 echo ""
-echo "4. 安装Python依赖..."
-ssh_exec "cd $PROJECT_DIR/bn_auto/server && pip3 install -r requirements.txt --quiet"
+echo "4. 安装Python依赖 (venv)..."
+ssh_exec "cd $PROJECT_DIR/bn_auto/server && (test -f venv/bin/pip && ./venv/bin/pip install -r requirements.txt --quiet || (python3 -m venv venv && ./venv/bin/pip install -r requirements.txt --quiet))"
 
 echo ""
 echo "5. 检查并配置MySQL数据库..."
@@ -128,6 +128,8 @@ export ADMIN_TOKEN=admin-secret-token
 export HOST=0.0.0.0
 export PORT=8000
 export DEBUG=False
+export TG_BOT_TOKEN=7954846227:AAHCCn14YoY1DVCs8ZBzNqFLGVTViTULfK8
+export TG_CHAT_ID=-5239389340
 
 # 启动服务
 python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -160,6 +162,8 @@ Environment=\"ADMIN_TOKEN=admin-secret-token\"
 Environment=\"HOST=0.0.0.0\"
 Environment=\"PORT=8000\"
 Environment=\"DEBUG=False\"
+Environment=\"TG_BOT_TOKEN=7954846227:AAHCCn14YoY1DVCs8ZBzNqFLGVTViTULfK8\"
+Environment=\"TG_CHAT_ID=-5239389340\"
 ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=10
@@ -170,17 +174,15 @@ EOF
 "
 
 echo ""
-echo "9. 重启服务..."
-ssh_exec "systemctl daemon-reload"
-ssh_exec "systemctl stop bnsj 2>&1 || true"
-ssh_exec "systemctl enable bnsj"
-ssh_exec "systemctl start bnsj"
+echo "9. 准备 PM2 日志目录并重启服务..."
+ssh_exec "mkdir -p $PROJECT_DIR/logs"
+ssh_exec "cd $PROJECT_DIR/bn_auto/server && (pm2 restart bnsj-server 2>/dev/null || pm2 start ecosystem.config.js)"
 
 echo ""
 echo "10. 检查服务状态..."
 sleep 3
-SERVICE_STATUS=$(ssh_exec "systemctl status bnsj --no-pager | head -5")
-echo "$SERVICE_STATUS"
+PM2_STATUS=$(ssh_exec "pm2 list 2>/dev/null | head -10")
+echo "$PM2_STATUS"
 
 echo ""
 echo "=========================================="
@@ -191,10 +193,10 @@ echo "服务地址: http://$SERVER_IP:8000"
 echo "管理后台: http://$SERVER_IP:8000/admin"
 echo "API文档: http://$SERVER_IP:8000/docs"
 echo ""
-echo "服务管理命令:"
-echo "  查看状态: ssh root@$SERVER_IP 'systemctl status bnsj'"
-echo "  查看日志: ssh root@$SERVER_IP 'journalctl -u bnsj -f'"
-echo "  重启服务: ssh root@$SERVER_IP 'systemctl restart bnsj'"
-echo "  停止服务: ssh root@$SERVER_IP 'systemctl stop bnsj'"
+echo "服务管理命令 (PM2):"
+echo "  查看状态: ssh root@$SERVER_IP 'pm2 list'"
+echo "  查看日志: ssh root@$SERVER_IP 'pm2 logs bnsj-server'"
+echo "  重启服务: ssh root@$SERVER_IP 'cd /opt/bnsj/bn_auto/server && pm2 restart bnsj-server'"
+echo "  停止服务: ssh root@$SERVER_IP 'pm2 stop bnsj-server'"
 echo ""
 
