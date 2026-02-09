@@ -787,7 +787,7 @@ def place_order_web(csrftoken, p20t, orderAmount, timeIncrements, symbolName, pa
     下单函数（复用原项目代码）
     """
     import requests
-    url = "https://www.binance.com/bapi/futures/v1/private/future/event-contract/place-order"
+    url = "https://www.binance.com/bapi/futures/v2/private/future/event-contract/place-order"
     headers = {
         "content-type": "application/json",
         "clienttype": "web",
