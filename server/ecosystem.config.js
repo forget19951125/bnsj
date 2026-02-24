@@ -24,7 +24,9 @@ module.exports = {
       DEBUG: 'False',
       TG_BOT_TOKEN: '7954846227:AAHCCn14YoY1DVCs8ZBzNqFLGVTViTULfK8',
       TG_CHAT_ID: '-5239389340',
-      TG_CHAT_ID_WEBHOOK: '-5134594313,-5248686159'
+      TG_CHAT_ID_WEBHOOK: '-5134594313,-5248686159',
+      SSL_CERT_FILE: '/opt/bnsj/bn_auto/server/venv/lib/python3.12/site-packages/certifi/cacert.pem',
+      REQUESTS_CA_BUNDLE: '/opt/bnsj/bn_auto/server/venv/lib/python3.12/site-packages/certifi/cacert.pem'
     },
     error_file: '/opt/bnsj/logs/pm2-error.log',
     out_file: '/opt/bnsj/logs/pm2-out.log',
