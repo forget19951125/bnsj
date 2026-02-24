@@ -24,7 +24,7 @@ module.exports = {
       DEBUG: 'False',
       TG_BOT_TOKEN: '7954846227:AAHCCn14YoY1DVCs8ZBzNqFLGVTViTULfK8',
       TG_CHAT_ID: '-5239389340',
-      TG_CHAT_ID_WEBHOOK: '-5134594313'
+      TG_CHAT_ID_WEBHOOK: '-5134594313,-5248686159'
     },
     error_file: '/opt/bnsj/logs/pm2-error.log',
     out_file: '/opt/bnsj/logs/pm2-out.log',
