@@ -122,7 +122,7 @@ from .services.order_service import OrderService
 from .api_client import APIClient
 from .ui.login_window_qt import LoginWindow
 from .ui.main_window_qt import MainWindow
-from .ui.qr_window_qt import QRWindow
+# from .ui.qr_window_qt import QRWindow  # 不再需要，用户手动在浏览器中扫码
 from .config import settings
 from .utils.token_manager import TokenManager
 
@@ -151,7 +151,7 @@ class ClientApp:
         self.qt_app = QApplication(sys.argv) if not QApplication.instance() else QApplication.instance()
         self.login_window = None
         self.main_window = None
-        self.qr_window = None
+        # self.qr_window = None  # 不再需要二维码窗口
         self.session_timer: threading.Timer = None
         self.heartbeat_timer: threading.Timer = None
         
@@ -579,15 +579,10 @@ class ClientApp:
     def _handle_binance_login(self):
         """处理币安登录"""
         def qr_callback(qr_data: str):
-            """二维码回调"""
-            # 在Qt主线程中显示二维码窗口
-            from PyQt5.QtCore import QTimer
-            def show_qr():
-                if self.qr_window:
-                    self.qr_window.close_window()
-                self.qr_window = QRWindow(qr_data)
-                self.qr_window.show()
-            QTimer.singleShot(0, show_qr)
+            """二维码回调（已禁用自动打开窗口，用户手动在浏览器中扫码）"""
+            # 不再自动打开二维码窗口，用户可以在浏览器中手动扫码登录
+            # 程序只负责监测登录成功并获取token
+            pass
         
         def login_thread():
             """登录线程"""
@@ -702,7 +697,8 @@ class ClientApp:
                 
                 # reset=True: 每次登录都清理缓存
                 log_to_gui("开始调用binance_service.login()...")
-                log_to_gui("注意: 浏览器窗口应该会弹出，如果没有弹出，请查看错误日志")
+                log_to_gui("✓ 浏览器窗口将自动打开，请在浏览器中扫码登录")
+                log_to_gui("✓ 程序将自动监测登录状态，登录成功后会自动获取Token")
                 
                 # 调用登录函数（这会启动浏览器）
                 try:
@@ -730,7 +726,8 @@ class ClientApp:
                     # 直接调用并捕获所有异常
                     try:
                         safe_print("[DEBUG] 开始执行binance_service.login()...")
-                        token_info = binance_service.login(reset=True, headless=False, qr_callback=qr_callback, user_id=user_id)
+                        # 不传递qr_callback，让用户手动在浏览器中扫码登录
+                        token_info = binance_service.login(reset=True, headless=False, qr_callback=None, user_id=user_id)
                         safe_print(f"[DEBUG] binance_service.login()返回: {token_info is not None}")
                         if token_info is None:
                             log_msg("登录失败: binance_service.login()返回None")
@@ -846,16 +843,7 @@ class ClientApp:
             else:
                 error("_on_binance_login_success() - main_window不存在！")
             
-            if self.qr_window:
-                debug("_on_binance_login_success() - 关闭qr_window")
-                try:
-                    self.qr_window.close_window()
-                    self.qr_window = None
-                    debug("_on_binance_login_success() - qr_window已关闭")
-                except Exception as qr_error:
-                    error(f"_on_binance_login_success() - 关闭qr_window时出错: {qr_error}")
-            else:
-                debug("_on_binance_login_success() - qr_window不存在")
+            # 不再需要关闭二维码窗口（因为不再自动打开）
             
             if self.main_window:
                 self.main_window.log("✓ GUI状态更新完成")
@@ -995,14 +983,12 @@ class ClientApp:
         # 清除登录信息
         self.auth_service.logout()
         
-        # 关闭主窗口和二维码窗口
+        # 关闭主窗口
         if self.main_window:
             self.main_window.close()
             self.main_window = None
         
-        if self.qr_window:
-            self.qr_window.close_window()
-            self.qr_window = None
+        # 不再需要关闭二维码窗口（因为不再自动打开）
         
         # 重新显示登录窗口
         self._show_login_window()

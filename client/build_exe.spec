@@ -22,6 +22,7 @@ hiddenimports = [
     'PIL._tkinter_finder',
     'requests',
     'pydantic',
+    'pydantic_core',
     'pydantic_settings',
     'app',
     'app.main',
@@ -43,6 +44,17 @@ hiddenimports = [
 
 # 收集PyQt5的数据文件
 datas = []
+
+# 收集pydantic_core的整个目录（包括所有文件）
+try:
+    import pydantic_core
+    import os
+    pydantic_core_path = os.path.dirname(pydantic_core.__file__)
+    # 将整个pydantic_core目录添加到datas，确保所有文件（包括.pyd）都被包含
+    datas.append((pydantic_core_path, 'pydantic_core'))
+    print(f"[打包] [OK] 添加pydantic_core整个目录到datas: {pydantic_core_path}")
+except Exception as e:
+    print(f"[打包] [警告] 无法添加pydantic_core目录: {e}")
 
 # 注意：PyQt5插件由PyInstaller的hook自动处理，不需要手动添加
 # 手动添加可能导致路径编码问题（特别是包含中文的路径）
@@ -146,10 +158,34 @@ except Exception as e:
     print(f"[打包] [警告] 无法添加Qt插件: {e}")
     print(f"[打包] 将继续打包，但可能无法正常运行")
 
+# 收集pydantic_core的二进制文件
+binaries = []
+try:
+    import pydantic_core
+    import glob
+    pydantic_core_path = os.path.dirname(pydantic_core.__file__)
+    pyd_files = glob.glob(os.path.join(pydantic_core_path, '*.pyd'))
+    for pyd_file in pyd_files:
+        # 添加到binaries，目标路径设为pydantic_core（确保.pyd文件在pydantic_core目录下）
+        bin_tuple = (pyd_file, 'pydantic_core')
+        binaries.append(bin_tuple)
+        print(f"[打包] [OK] 添加pydantic_core二进制文件到binaries: {os.path.basename(pyd_file)}")
+    
+    # 也添加.dll文件（如果有）
+    dll_files = glob.glob(os.path.join(pydantic_core_path, '*.dll'))
+    for dll_file in dll_files:
+        bin_tuple = (dll_file, 'pydantic_core')
+        binaries.append(bin_tuple)
+        print(f"[打包] [OK] 添加pydantic_core DLL文件到binaries: {os.path.basename(dll_file)}")
+except Exception as e:
+    print(f"[打包] [警告] 收集pydantic_core二进制文件失败: {e}")
+    import traceback
+    traceback.print_exc()
+
 a = Analysis(
     ['run_client.py'],
     pathex=[spec_dir],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[spec_dir],  # 使用自定义hook目录

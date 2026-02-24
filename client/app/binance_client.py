@@ -583,11 +583,10 @@ def get_token(reset=False, headless=True, qr_callback=None, user_id=None, log_ca
                         if code not in qr_results:
                             qr_results.append(code)
                             log_msg = log_callback if log_callback else print
-                            log_msg("请使用 Binance App 扫描以下二维码登录")
-                            print_qr(code, log_callback=log_callback)
-                            img = qrcode.make(code).convert("RGB")
-                            img.save("qrcode.jpg", format="JPEG", quality=100)
-                            # 调用回调函数
+                            log_msg("✓ 检测到登录二维码，请在浏览器中扫码登录")
+                            # 不再自动打开二维码窗口，用户手动在浏览器中扫码
+                            # 不再保存二维码图片
+                            # 如果提供了回调函数，调用它（但回调函数现在为空操作）
                             if qr_callback:
                                 qr_callback(code)
                     elif "https://accounts.binance.com/bapi/accounts/v2/private/authcenter/setTrustDevice" in url:
@@ -710,17 +709,8 @@ def get_token(reset=False, headless=True, qr_callback=None, user_id=None, log_ca
                             except:
                                 pass
 
-                            try:
-                                if page.get_by_text(re.compile("登录")).count() > 0 and page.get_by_text(re.compile("邮箱/手机号码")).count() > 0 and page.get_by_text(re.compile("用手机相机扫描")).count() == 0:
-                                    page.get_by_role("button", name=re.compile("登录")).first.click(timeout=1200, force=True)
-                            except:
-                                pass
-
-                            try:
-                                if page.get_by_text(re.compile("刷新二维码")).count() > 0:
-                                    page.get_by_role("button", name=re.compile("刷新二维码")).first.click(timeout=1200, force=True)
-                            except:
-                                pass
+                            # 不再自动点击"登录"按钮，让用户手动操作
+                            # 不再自动点击"刷新二维码"按钮，让用户手动操作
 
                             try:
                                 if page.get_by_text(re.compile("保持登录状态")).count() > 0:
